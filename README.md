@@ -7,7 +7,7 @@ Heavily inspired by [reth-bsc](https://github.com/loocapro/reth-bsc).
 
 - [ ] Make it compilable
   - [ ] EVM
-  - [v] Storage
+  - [x] Storage
   - [ ] TX forwarder API
 - [ ] Decide whether to include system txs, receipts in block or not
 - [ ] Downloader
