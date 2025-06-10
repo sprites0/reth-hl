@@ -4,10 +4,9 @@ use crate::{
 };
 use alloy_consensus::BlockHeader;
 use alloy_primitives::Bytes;
-use itertools::izip;
 use reth_chainspec::EthereumHardforks;
 use reth_db::{
-    cursor::DbCursorRW,
+    cursor::{DbCursorRO, DbCursorRW},
     transaction::{DbTx, DbTxMut},
     DbTxUnwindExt,
 };
@@ -55,8 +54,8 @@ impl HlStorage {
     fn read_precompile_calls<Provider>(
         &self,
         provider: &Provider,
-        inputs: Vec<ReadBodyInput<'_, HlBlock>>,
-    ) -> ProviderResult<Vec<ReadPrecompileCalls>>
+        inputs: &[ReadBodyInput<'_, HlBlock>],
+    ) -> ProviderResult<Vec<Option<ReadPrecompileCalls>>>
     where
         Provider: DBProvider<Tx: DbTx>,
     {
@@ -69,7 +68,7 @@ impl HlStorage {
             let precompile_calls = precompile_calls_cursor
                 .seek_exact(header.number())?
                 .map(|(_, calls)| calls)
-                .unwrap_or_default();
+                .map(|calls| rmp_serde::from_slice(&calls).unwrap());
             read_precompile_calls.push(precompile_calls);
         }
 
@@ -87,27 +86,25 @@ where
         bodies: Vec<(u64, Option<HlBlockBody>)>,
         write_to: StorageLocation,
     ) -> ProviderResult<()> {
-        let (eth_bodies, _sidecars, read_precompile_calls) =
-            izip!(bodies.into_iter().map(|(block_number, body)| {
-                if let Some(HlBlockBody {
+        let mut eth_bodies = Vec::with_capacity(bodies.len());
+        let mut read_precompile_calls = Vec::with_capacity(bodies.len());
+
+        for (block_number, body) in bodies {
+            match body {
+                Some(HlBlockBody {
                     inner,
-                    sidecars,
-                    read_precompile_calls,
-                }) = body
-                {
-                    (
-                        (block_number, Some(inner)),
-                        (block_number, Some(sidecars)),
-                        (block_number, Some(read_precompile_calls)),
-                    )
-                } else {
-                    (
-                        (block_number, None),
-                        (block_number, None),
-                        (block_number, None),
-                    )
+                    sidecars: _,
+                    read_precompile_calls: rpc,
+                }) => {
+                    eth_bodies.push((block_number, Some(inner)));
+                    read_precompile_calls.push((block_number, rpc));
                 }
-            }));
+                None => {
+                    eth_bodies.push((block_number, None));
+                    read_precompile_calls.push((block_number, None));
+                }
+            }
+        }
 
         self.0.write_block_bodies(provider, eth_bodies, write_to)?;
         self.write_precompile_calls(provider, read_precompile_calls)?;
@@ -142,13 +139,14 @@ where
         provider: &Provider,
         inputs: Vec<ReadBodyInput<'_, Self::Block>>,
     ) -> ProviderResult<Vec<HlBlockBody>> {
+        let read_precompile_calls = self.read_precompile_calls(provider, &inputs)?;
         let eth_bodies = self.0.read_block_bodies(provider, inputs)?;
-        let read_precompile_calls = self.read_precompile_calls(provider, inputs)?;
 
         // NOTE: sidecars are not used in HyperEVM yet.
         Ok(eth_bodies
             .into_iter()
-            .map(|inner| HlBlockBody {
+            .zip(read_precompile_calls)
+            .map(|(inner, read_precompile_calls)| HlBlockBody {
                 inner,
                 sidecars: None,
                 read_precompile_calls,
