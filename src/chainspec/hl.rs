@@ -9,7 +9,7 @@ static GENESIS_HASH: B256 =
     b256!("d8fcc13b6a195b88b7b2da3722ff6cad767b13a8c1e9ffb1c73aa9d216d895f0");
 
 /// The Hyperliqiud Mainnet spec
-pub static HL_MAINNET: Lazy<Arc<ChainSpec>> = Lazy::new(|| {
+pub fn hl_mainnet() -> ChainSpec {
     ChainSpec {
         chain: Chain::from_named(NamedChain::Hyperliquid),
         genesis: serde_json::from_str(include_str!("genesis.json"))
@@ -20,8 +20,7 @@ pub static HL_MAINNET: Lazy<Arc<ChainSpec>> = Lazy::new(|| {
         prune_delete_limit: 10000,
         ..Default::default()
     }
-    .into()
-});
+}
 
 /// Empty genesis header for Hyperliquid Mainnet.
 ///

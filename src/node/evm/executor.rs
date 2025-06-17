@@ -1,0 +1,211 @@
+use super::patch::patch_mainnet_after_tx;
+use crate::{evm::transaction::HlTxEnv, hardforks::HlHardforks};
+use alloy_consensus::{Transaction, TxReceipt};
+use alloy_eips::{eip7685::Requests, Encodable2718};
+use alloy_evm::{block::ExecutableTx, eth::receipt_builder::ReceiptBuilderCtx};
+use alloy_primitives::Address;
+use reth_chainspec::{EthChainSpec, EthereumHardforks, Hardforks};
+use reth_evm::{
+    block::{BlockValidationError, CommitChanges},
+    eth::{receipt_builder::ReceiptBuilder, EthBlockExecutionCtx},
+    execute::{BlockExecutionError, BlockExecutor},
+    Database, Evm, FromRecoveredTx, FromTxWithEncoded, IntoTxEnv, OnStateHook, RecoveredTx,
+};
+use reth_primitives::TransactionSigned;
+use reth_provider::BlockExecutionResult;
+use reth_revm::State;
+use revm::{
+    context::{
+        result::{ExecutionResult, ResultAndState},
+        TxEnv,
+    },
+    state::Bytecode,
+    Database as _, DatabaseCommit,
+};
+
+fn is_system_transaction(tx: &TransactionSigned) -> bool {
+    let Some(gas_price) = tx.gas_price() else {
+        return false;
+    };
+    gas_price == 0
+}
+
+pub struct HlBlockExecutor<'a, EVM, Spec, R: ReceiptBuilder>
+where
+    Spec: EthChainSpec,
+{
+    /// Reference to the specification object.
+    spec: Spec,
+    /// Inner EVM.
+    evm: EVM,
+    /// Gas used in the block.
+    gas_used: u64,
+    /// Receipts of executed transactions.
+    receipts: Vec<R::Receipt>,
+    /// System txs
+    system_txs: Vec<R::Transaction>,
+    /// Receipt builder.
+    receipt_builder: R,
+    /// System contracts used to trigger fork specific logic.
+    // system_contracts: SystemContract<Spec>,
+    /// Context for block execution.
+    _ctx: EthBlockExecutionCtx<'a>,
+}
+
+impl<'a, DB, EVM, Spec, R: ReceiptBuilder> HlBlockExecutor<'a, EVM, Spec, R>
+where
+    DB: Database + 'a,
+    EVM: Evm<
+        DB = &'a mut State<DB>,
+        Tx: FromRecoveredTx<R::Transaction>
+                + FromRecoveredTx<TransactionSigned>
+                + FromTxWithEncoded<TransactionSigned>,
+    >,
+    Spec: EthereumHardforks + HlHardforks + EthChainSpec + Hardforks + Clone,
+    R: ReceiptBuilder<Transaction = TransactionSigned, Receipt: TxReceipt>,
+    <R as ReceiptBuilder>::Transaction: Unpin + From<TransactionSigned>,
+    <EVM as alloy_evm::Evm>::Tx: FromTxWithEncoded<<R as ReceiptBuilder>::Transaction>,
+    HlTxEnv<TxEnv>: IntoTxEnv<<EVM as alloy_evm::Evm>::Tx>,
+    R::Transaction: Into<TransactionSigned>,
+{
+    /// Creates a new HlBlockExecutor.
+    pub fn new(
+        evm: EVM,
+        _ctx: EthBlockExecutionCtx<'a>,
+        spec: Spec,
+        receipt_builder: R,
+        // system_contracts: SystemContract<Spec>,
+    ) -> Self {
+        Self {
+            spec,
+            evm,
+            gas_used: 0,
+            receipts: vec![],
+            system_txs: vec![],
+            receipt_builder,
+            // system_contracts,
+            _ctx,
+        }
+    }
+
+    /// Initializes the genesis contracts
+    fn deploy_genesis_contracts(
+        &mut self,
+        beneficiary: Address,
+    ) -> Result<(), BlockExecutionError> {
+        todo!("Deploy WETH, System contract");
+        // Ok(())
+    }
+}
+
+impl<'a, DB, E, Spec, R> BlockExecutor for HlBlockExecutor<'a, E, Spec, R>
+where
+    DB: Database + 'a,
+    E: Evm<
+        DB = &'a mut State<DB>,
+        Tx: FromRecoveredTx<R::Transaction>
+                + FromRecoveredTx<TransactionSigned>
+                + FromTxWithEncoded<TransactionSigned>,
+    >,
+    Spec: EthereumHardforks + HlHardforks + EthChainSpec + Hardforks,
+    R: ReceiptBuilder<Transaction = TransactionSigned, Receipt: TxReceipt>,
+    <R as ReceiptBuilder>::Transaction: Unpin + From<TransactionSigned>,
+    <E as alloy_evm::Evm>::Tx: FromTxWithEncoded<<R as ReceiptBuilder>::Transaction>,
+    HlTxEnv<TxEnv>: IntoTxEnv<<E as alloy_evm::Evm>::Tx>,
+    R::Transaction: Into<TransactionSigned>,
+{
+    type Transaction = TransactionSigned;
+    type Receipt = R::Receipt;
+    type Evm = E;
+
+    fn apply_pre_execution_changes(&mut self) -> Result<(), BlockExecutionError> {
+        // If first block deploy genesis contracts
+        if self.evm.block().number == 1 {
+            self.deploy_genesis_contracts(self.evm.block().beneficiary)?;
+        }
+
+        Ok(())
+    }
+
+    fn execute_transaction_with_commit_condition(
+        &mut self,
+        _tx: impl ExecutableTx<Self>,
+        _f: impl FnOnce(&ExecutionResult<<Self::Evm as Evm>::HaltReason>) -> CommitChanges,
+    ) -> Result<Option<u64>, BlockExecutionError> {
+        Ok(Some(0))
+    }
+
+    fn execute_transaction_with_result_closure(
+        &mut self,
+        tx: impl ExecutableTx<Self>
+            + IntoTxEnv<<E as alloy_evm::Evm>::Tx>
+            + RecoveredTx<TransactionSigned>,
+        f: impl for<'b> FnOnce(&'b ExecutionResult<<E as alloy_evm::Evm>::HaltReason>),
+    ) -> Result<u64, BlockExecutionError> {
+        // Check if it's a system transaction
+        // let signer = tx.signer();
+        // let is_system_transaction = is_system_transaction(tx.tx());
+
+        let block_available_gas = self.evm.block().gas_limit - self.gas_used;
+        if tx.tx().gas_limit() > block_available_gas {
+            return Err(
+                BlockValidationError::TransactionGasLimitMoreThanAvailableBlockGas {
+                    transaction_gas_limit: tx.tx().gas_limit(),
+                    block_available_gas,
+                }
+                .into(),
+            );
+        }
+        let result_and_state = self
+            .evm
+            .transact(tx)
+            .map_err(|err| BlockExecutionError::evm(err, tx.tx().trie_hash()))?;
+        let ResultAndState { result, mut state } = result_and_state;
+        f(&result);
+        let gas_used = result.gas_used();
+        self.gas_used += gas_used;
+        self.receipts
+            .push(self.receipt_builder.build_receipt(ReceiptBuilderCtx {
+                tx: tx.tx(),
+                evm: &self.evm,
+                result,
+                state: &state,
+                cumulative_gas_used: self.gas_used,
+            }));
+
+        // apply patches after
+        patch_mainnet_after_tx(
+            self.evm.block().number,
+            self.receipts.len() as u64,
+            is_system_transaction(tx.tx()),
+            &mut state,
+        )?;
+
+        self.evm.db_mut().commit(state);
+
+        Ok(gas_used)
+    }
+
+    fn finish(
+        mut self,
+    ) -> Result<(Self::Evm, BlockExecutionResult<R::Receipt>), BlockExecutionError> {
+        Ok((
+            self.evm,
+            BlockExecutionResult {
+                receipts: self.receipts,
+                requests: Requests::default(),
+                gas_used: self.gas_used,
+            },
+        ))
+    }
+
+    fn set_state_hook(&mut self, _hook: Option<Box<dyn OnStateHook>>) {}
+
+    fn evm_mut(&mut self) -> &mut Self::Evm {
+        &mut self.evm
+    }
+
+    fn evm(&self) -> &Self::Evm {
+        &self.evm
+    }
+}

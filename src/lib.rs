@@ -1,6 +1,6 @@
-mod chainspec;
-mod consensus;
+pub mod chainspec;
+pub mod consensus;
+mod evm;
 mod hardforks;
-mod node;
-
-pub use node::primitives;
+pub mod node;
+pub use node::primitives::{HlBlock, HlBlockBody, HlPrimitives};

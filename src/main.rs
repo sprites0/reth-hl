@@ -1,7 +1,7 @@
 use clap::{Args, Parser};
 use reth::builder::NodeHandle;
 use reth_hl::{
-    chainspec::HlChainSpecParser,
+    chainspec::parser::HlChainSpecParser,
     node::{cli::Cli, HlNode},
 };
 

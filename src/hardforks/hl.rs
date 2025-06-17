@@ -5,7 +5,7 @@ use reth_chainspec::ForkCondition;
 use reth_ethereum_forks::{hardfork, ChainHardforks, EthereumHardfork, Hardfork};
 
 hardfork!(
-    /// The name of a bsc hardfork.
+    /// The name of a hl hardfork.
     ///
     /// When building a list of hardforks for a chain, it's still expected to mix with [`EthereumHardfork`].
     /// There is no name for these hardforks; just some bugfixes on the evm chain.
@@ -62,8 +62,8 @@ impl HlHardfork {
         )
     }
 
-    /// Bsc mainnet list of hardforks.
-    pub fn bsc_mainnet() -> ChainHardforks {
+    /// Hl mainnet list of hardforks.
+    pub fn hl_mainnet() -> ChainHardforks {
         ChainHardforks::new(vec![
             (EthereumHardfork::Frontier.boxed(), ForkCondition::Block(0)),
             (EthereumHardfork::Homestead.boxed(), ForkCondition::Block(0)),
@@ -86,14 +86,10 @@ impl HlHardfork {
                 EthereumHardfork::MuirGlacier.boxed(),
                 ForkCondition::Block(0),
             ),
-            (
-                EthereumHardfork::Berlin.boxed(),
-                ForkCondition::Block(31302048),
-            ),
-            (
-                EthereumHardfork::London.boxed(),
-                ForkCondition::Block(31302048),
-            ),
+            (EthereumHardfork::Berlin.boxed(), ForkCondition::Block(0)),
+            (EthereumHardfork::London.boxed(), ForkCondition::Block(0)),
+            (EthereumHardfork::Shanghai.boxed(), ForkCondition::Block(0)),
+            (EthereumHardfork::Cancun.boxed(), ForkCondition::Block(0)),
             (Self::V1.boxed(), ForkCondition::Block(0)),
             (Self::V2.boxed(), ForkCondition::Block(0)),
             (Self::V3.boxed(), ForkCondition::Block(0)),

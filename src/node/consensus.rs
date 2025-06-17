@@ -1,7 +1,7 @@
 use crate::{
     hardforks::HlHardforks,
     node::HlNode,
-    primitives::{HlBlock, HlBlockBody, HlPrimitives},
+    {HlBlock, HlBlockBody, HlPrimitives},
 };
 use reth::{
     api::FullNodeTypes,

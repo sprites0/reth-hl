@@ -1,6 +1,6 @@
 use crate::{
     node::types::ReadPrecompileCalls,
-    primitives::{HlBlock, HlBlockBody, HlPrimitives},
+    {HlBlock, HlBlockBody, HlPrimitives},
 };
 use alloy_consensus::BlockHeader;
 use alloy_primitives::Bytes;
