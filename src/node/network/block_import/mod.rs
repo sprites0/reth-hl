@@ -29,7 +29,9 @@ impl HlBlockImport {
 
 impl BlockImport<HlNewBlock> for HlBlockImport {
     fn on_new_block(&mut self, peer_id: PeerId, incoming_block: NewBlockEvent<HlNewBlock>) {
-        unreachable!("reth-hl does not use network, but uses poller for files");
+        if let NewBlockEvent::Block(block) = incoming_block {
+            let _ = self.handle.send_block(block, peer_id);
+        }
     }
 
     fn poll(&mut self, cx: &mut Context<'_>) -> Poll<ImportEvent> {
