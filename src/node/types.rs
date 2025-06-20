@@ -6,12 +6,34 @@ use alloy_primitives::{Address, Bytes, Log};
 use alloy_rlp::{Decodable, Encodable, RlpDecodable, RlpEncodable};
 use bytes::BufMut;
 use reth_primitives::{SealedBlock, Transaction};
+use revm::primitives::HashMap;
 use serde::{Deserialize, Serialize};
 
 pub type ReadPrecompileCall = (Address, Vec<(ReadPrecompileInput, ReadPrecompileResult)>);
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, Default)]
 pub struct ReadPrecompileCalls(pub Vec<ReadPrecompileCall>);
+pub type ReadPrecompileMap = HashMap<Address, HashMap<ReadPrecompileInput, ReadPrecompileResult>>;
+
+impl From<ReadPrecompileCalls> for ReadPrecompileMap {
+    fn from(calls: ReadPrecompileCalls) -> Self {
+        calls
+            .0
+            .into_iter()
+            .map(|(address, calls)| (address, calls.into_iter().collect()))
+            .collect()
+    }
+}
+
+impl From<ReadPrecompileMap> for ReadPrecompileCalls {
+    fn from(map: ReadPrecompileMap) -> Self {
+        Self(
+            map.into_iter()
+                .map(|(address, calls)| (address, calls.into_iter().collect()))
+                .collect(),
+        )
+    }
+}
 
 impl Encodable for ReadPrecompileCalls {
     fn encode(&self, out: &mut dyn BufMut) {

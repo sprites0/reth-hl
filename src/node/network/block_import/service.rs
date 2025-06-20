@@ -379,6 +379,7 @@ mod tests {
                     withdrawals: None,
                 },
                 sidecars: None,
+                read_precompile_calls: None,
             },
         };
         let new_block = HlNewBlock(NewBlock { block, td: U128::from(1) });

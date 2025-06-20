@@ -1,12 +1,15 @@
 use super::HlEvm;
-use crate::evm::{
-    api::{
-        builder::HlBuilder,
-        ctx::{HlContext, DefaultHl},
+use crate::{
+    evm::{
+        api::{
+            builder::HlBuilder,
+            ctx::{DefaultHl, HlContext},
+        },
+        precompiles::HlPrecompiles,
+        spec::HlSpecId,
+        transaction::HlTxEnv,
     },
-    precompiles::HlPrecompiles,
-    spec::HlSpecId,
-    transaction::HlTxEnv,
+    node::types::ReadPrecompileMap,
 };
 use reth_evm::{precompiles::PrecompilesMap, EvmEnv, EvmFactory};
 use reth_revm::{Context, Database};
@@ -39,7 +42,8 @@ impl EvmFactory for HlEvmFactory {
         db: DB,
         input: EvmEnv<HlSpecId>,
     ) -> Self::Evm<DB, NoOpInspector> {
-        let precompiles = HlPrecompiles::new(input.cfg_env.spec).precompiles();
+        let precompiles =
+            HlPrecompiles::new(input.cfg_env.spec, ReadPrecompileMap::default()).precompiles();
         HlEvm {
             inner: Context::hl()
                 .with_block(input.block_env)
@@ -60,7 +64,8 @@ impl EvmFactory for HlEvmFactory {
         input: EvmEnv<HlSpecId>,
         inspector: I,
     ) -> Self::Evm<DB, I> {
-        let precompiles = HlPrecompiles::new(input.cfg_env.spec).precompiles();
+        let precompiles =
+            HlPrecompiles::new(input.cfg_env.spec, ReadPrecompileMap::default()).precompiles();
         HlEvm {
             inner: Context::hl()
                 .with_block(input.block_env)

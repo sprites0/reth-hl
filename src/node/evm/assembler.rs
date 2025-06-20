@@ -15,18 +15,7 @@ impl BlockAssembler<HlBlockExecutorFactory> for HlEvmConfig {
         &self,
         input: BlockAssemblerInput<'_, '_, HlBlockExecutorFactory, Header>,
     ) -> Result<Self::Block, BlockExecutionError> {
-        let Block { header, body: inner } = self.block_assembler.assemble_block(input)?;
-        Ok(HlBlock {
-            header,
-            body: HlBlockBody {
-                inner,
-                // HACK: we're setting sidecars to `None` here but ideally we should somehow get
-                // them from the payload builder.
-                //
-                // Payload building is out of scope of reth-bsc for now, so this is not critical
-                sidecars: None,
-                read_precompile_calls: None,
-            },
-        })
+        let HlBlock { header, body } = self.block_assembler.assemble_block(input)?;
+        Ok(HlBlock { header, body })
     }
 }

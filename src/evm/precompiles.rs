@@ -1,5 +1,12 @@
 #![allow(unused)]
 
+use crate::node::types::ReadPrecompileResult;
+use crate::node::types::{ReadPrecompileInput, ReadPrecompileMap};
+use revm::interpreter::{Gas, InstructionResult};
+use revm::precompile::PrecompileError;
+use revm::precompile::PrecompileOutput;
+use revm::primitives::Bytes;
+
 use super::spec::HlSpecId;
 use cfg_if::cfg_if;
 use once_cell::{race::OnceBox, sync::Lazy};
@@ -18,15 +25,23 @@ use std::boxed::Box;
 pub struct HlPrecompiles {
     /// Inner precompile provider is same as Ethereums.
     inner: EthPrecompiles,
+    /// Precompile calls
+    precompile_calls: ReadPrecompileMap,
 }
 
 impl HlPrecompiles {
     /// Create a new precompile provider with the given hl spec.
     #[inline]
-    pub fn new(spec: HlSpecId) -> Self {
+    pub fn new(spec: HlSpecId, precompile_calls: ReadPrecompileMap) -> Self {
         let precompiles = cancun();
 
-        Self { inner: EthPrecompiles { precompiles, spec: spec.into_eth_spec() } }
+        Self {
+            inner: EthPrecompiles {
+                precompiles,
+                spec: spec.into_eth_spec(),
+            },
+            precompile_calls,
+        }
     }
 
     #[inline]
@@ -53,7 +68,7 @@ where
 
     #[inline]
     fn set_spec(&mut self, spec: <CTX::Cfg as Cfg>::Spec) -> bool {
-        *self = Self::new(spec);
+        *self = Self::new(spec, self.precompile_calls.clone());
         true
     }
 
@@ -66,7 +81,51 @@ where
         is_static: bool,
         gas_limit: u64,
     ) -> Result<Option<Self::Output>, String> {
-        self.inner.run(context, address, inputs, is_static, gas_limit)
+        let Some(precompile_calls) = self.precompile_calls.get(address) else {
+            return self
+                .inner
+                .run(context, address, inputs, is_static, gas_limit);
+        };
+
+        let input = ReadPrecompileInput {
+            input: inputs.input.bytes(context),
+            gas_limit,
+        };
+        let mut result = InterpreterResult {
+            result: InstructionResult::Return,
+            gas: Gas::new(gas_limit),
+            output: Bytes::new(),
+        };
+
+        let Some(get) = precompile_calls.get(&input) else {
+            result.gas.spend_all();
+            result.result = InstructionResult::PrecompileError;
+            return Ok(Some(result));
+        };
+
+        return match *get {
+            ReadPrecompileResult::Ok {
+                gas_used,
+                ref bytes,
+            } => {
+                let underflow = result.gas.record_cost(gas_used);
+                assert!(underflow, "Gas underflow is not possible");
+                result.output = bytes.clone();
+                Ok(Some(result))
+            }
+            ReadPrecompileResult::OutOfGas => {
+                // Use all the gas passed to this precompile
+                result.gas.spend_all();
+                result.result = InstructionResult::OutOfGas;
+                Ok(Some(result))
+            }
+            ReadPrecompileResult::Error => {
+                result.gas.spend_all();
+                result.result = InstructionResult::PrecompileError;
+                Ok(Some(result))
+            }
+            ReadPrecompileResult::UnexpectedError => panic!("unexpected precompile error"),
+        };
     }
 
     #[inline]
@@ -82,6 +141,6 @@ where
 
 impl Default for HlPrecompiles {
     fn default() -> Self {
-        Self::new(HlSpecId::default())
+        Self::new(HlSpecId::default(), ReadPrecompileMap::default())
     }
 }

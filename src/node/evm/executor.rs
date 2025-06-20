@@ -1,13 +1,13 @@
+use super::config::HlBlockExecutionCtx;
 use super::patch::patch_mainnet_after_tx;
-use crate::{evm::transaction::HlTxEnv, hardforks::HlHardforks};
+use crate::{evm::transaction::HlTxEnv, hardforks::HlHardforks, node::types::ReadPrecompileCalls};
 use alloy_consensus::{Transaction, TxReceipt};
 use alloy_eips::{eip7685::Requests, Encodable2718};
 use alloy_evm::{block::ExecutableTx, eth::receipt_builder::ReceiptBuilderCtx};
-use alloy_primitives::Address;
 use reth_chainspec::{EthChainSpec, EthereumHardforks, Hardforks};
 use reth_evm::{
     block::{BlockValidationError, CommitChanges},
-    eth::{receipt_builder::ReceiptBuilder, EthBlockExecutionCtx},
+    eth::receipt_builder::ReceiptBuilder,
     execute::{BlockExecutionError, BlockExecutor},
     Database, Evm, FromRecoveredTx, FromTxWithEncoded, IntoTxEnv, OnStateHook, RecoveredTx,
 };
@@ -19,8 +19,7 @@ use revm::{
         result::{ExecutionResult, ResultAndState},
         TxEnv,
     },
-    state::Bytecode,
-    Database as _, DatabaseCommit,
+    DatabaseCommit,
 };
 
 fn is_system_transaction(tx: &TransactionSigned) -> bool {
@@ -44,12 +43,12 @@ where
     receipts: Vec<R::Receipt>,
     /// System txs
     system_txs: Vec<R::Transaction>,
+    /// Read precompile calls
+    read_precompile_calls: ReadPrecompileCalls,
     /// Receipt builder.
     receipt_builder: R,
-    /// System contracts used to trigger fork specific logic.
-    // system_contracts: SystemContract<Spec>,
     /// Context for block execution.
-    _ctx: EthBlockExecutionCtx<'a>,
+    ctx: HlBlockExecutionCtx<'a>,
 }
 
 impl<'a, DB, EVM, Spec, R: ReceiptBuilder> HlBlockExecutor<'a, EVM, Spec, R>
@@ -69,32 +68,18 @@ where
     R::Transaction: Into<TransactionSigned>,
 {
     /// Creates a new HlBlockExecutor.
-    pub fn new(
-        evm: EVM,
-        _ctx: EthBlockExecutionCtx<'a>,
-        spec: Spec,
-        receipt_builder: R,
-        // system_contracts: SystemContract<Spec>,
-    ) -> Self {
+    pub fn new(evm: EVM, ctx: HlBlockExecutionCtx<'a>, spec: Spec, receipt_builder: R) -> Self {
         Self {
             spec,
             evm,
             gas_used: 0,
             receipts: vec![],
             system_txs: vec![],
+            read_precompile_calls: ReadPrecompileCalls::default(),
             receipt_builder,
             // system_contracts,
-            _ctx,
+            ctx,
         }
-    }
-
-    /// Initializes the genesis contracts
-    fn deploy_genesis_contracts(
-        &mut self,
-        beneficiary: Address,
-    ) -> Result<(), BlockExecutionError> {
-        todo!("Deploy WETH, System contract");
-        // Ok(())
     }
 }
 
@@ -119,11 +104,6 @@ where
     type Evm = E;
 
     fn apply_pre_execution_changes(&mut self) -> Result<(), BlockExecutionError> {
-        // If first block deploy genesis contracts
-        if self.evm.block().number == 1 {
-            self.deploy_genesis_contracts(self.evm.block().beneficiary)?;
-        }
-
         Ok(())
     }
 
@@ -186,9 +166,7 @@ where
         Ok(gas_used)
     }
 
-    fn finish(
-        mut self,
-    ) -> Result<(Self::Evm, BlockExecutionResult<R::Receipt>), BlockExecutionError> {
+    fn finish(self) -> Result<(Self::Evm, BlockExecutionResult<R::Receipt>), BlockExecutionError> {
         Ok((
             self.evm,
             BlockExecutionResult {

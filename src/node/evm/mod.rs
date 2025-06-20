@@ -121,7 +121,12 @@ where
     }
 
     fn finish(self) -> (Self::DB, EvmEnv<Self::Spec>) {
-        let Context { block: block_env, cfg: cfg_env, journaled_state, .. } = self.inner.0.ctx;
+        let Context {
+            block: block_env,
+            cfg: cfg_env,
+            journaled_state,
+            ..
+        } = self.inner.0.ctx;
 
         (journaled_state.database, EvmEnv { block_env, cfg_env })
     }
