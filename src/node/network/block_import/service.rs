@@ -1,6 +1,6 @@
 use super::handle::ImportHandle;
 use crate::{
-    consensus::{HlConsensus, HlConsensusErr},
+    consensus::HlConsensus,
     node::{network::HlNewBlock, rpc::engine_api::payload::HlPayloadTypes},
     HlBlock, HlBlockBody,
 };
@@ -185,7 +185,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::chainspec::bsc::bsc_mainnet;
+    use crate::chainspec::hl::hl_mainnet;
 
     use super::*;
     use alloy_primitives::{B256, U128};
