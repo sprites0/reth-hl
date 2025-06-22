@@ -1,7 +1,11 @@
 use super::handle::ImportHandle;
 use crate::{
     consensus::HlConsensus,
-    node::{network::HlNewBlock, rpc::engine_api::payload::HlPayloadTypes},
+    node::{
+        network::HlNewBlock,
+        rpc::engine_api::payload::HlPayloadTypes,
+        types::{BlockAndReceipts, EvmBlock},
+    },
     HlBlock, HlBlockBody,
 };
 use alloy_consensus::{BlockBody, Header};
@@ -9,6 +13,7 @@ use alloy_primitives::U128;
 use alloy_rpc_types::engine::{ForkchoiceState, PayloadStatusEnum};
 use futures::{future::Either, stream::FuturesUnordered, StreamExt};
 use reth_engine_primitives::{BeaconConsensusEngineHandle, EngineTypes};
+use reth_eth_wire::NewBlock;
 use reth_network::{
     import::{BlockImportError, BlockImportEvent, BlockImportOutcome, BlockValidation},
     message::NewBlockMessage,
@@ -59,6 +64,7 @@ where
     to_network: UnboundedSender<ImportEvent>,
     /// Pending block imports.
     pending_imports: FuturesUnordered<ImportFut>,
+    height: u64,
 }
 
 impl<Provider> ImportService<Provider>
@@ -78,6 +84,7 @@ where
             from_network,
             to_network,
             pending_imports: FuturesUnordered::new(),
+            height: 2000000,
         }
     }
 
@@ -91,10 +98,11 @@ where
 
             match engine.new_payload(payload).await {
                 Ok(payload_status) => match payload_status.status {
-                    PayloadStatusEnum::Valid => {
-                        Outcome { peer: peer_id, result: Ok(BlockValidation::ValidBlock { block }) }
-                            .into()
+                    PayloadStatusEnum::Valid => Outcome {
+                        peer: peer_id,
+                        result: Ok(BlockValidation::ValidBlock { block }),
                     }
+                    .into(),
                     PayloadStatusEnum::Invalid { validation_error } => Outcome {
                         peer: peer_id,
                         result: Err(BlockImportError::Other(validation_error.into())),
@@ -127,13 +135,16 @@ where
                 finalized_block_hash: head_block_hash,
             };
 
-            match engine.fork_choice_updated(state, None, EngineApiMessageVersion::default()).await
+            match engine
+                .fork_choice_updated(state, None, EngineApiMessageVersion::default())
+                .await
             {
                 Ok(response) => match response.payload_status.status {
-                    PayloadStatusEnum::Valid => {
-                        Outcome { peer: peer_id, result: Ok(BlockValidation::ValidBlock { block }) }
-                            .into()
+                    PayloadStatusEnum::Valid => Outcome {
+                        peer: peer_id,
+                        result: Ok(BlockValidation::ValidBlock { block }),
                     }
+                    .into(),
                     PayloadStatusEnum::Invalid { validation_error } => Outcome {
                         peer: peer_id,
                         result: Err(BlockImportError::Other(validation_error.into())),
@@ -166,8 +177,23 @@ where
         let this = self.get_mut();
 
         // Receive new blocks from network
-        while let Poll::Ready(Some((block, peer_id))) = this.from_network.poll_recv(cx) {
-            this.on_new_block(block, peer_id);
+        while let Some(block) = collect_block(this.height) {
+            let peer_id = PeerId::random();
+            let reth_block = block.to_reth_block();
+            let td = U128::from(reth_block.header().difficulty());
+            let msg = NewBlockMessage {
+                hash: reth_block.header().hash_slow(),
+                block: Arc::new(HlNewBlock(NewBlock {
+                    block: reth_block,
+                    td,
+                })),
+            };
+            this.on_new_block(msg, peer_id);
+            this.height += 1;
+
+            if this.height > 2000000 {
+                break;
+            }
         }
 
         // Process completed imports and send events to network
@@ -180,6 +206,22 @@ where
         }
 
         Poll::Pending
+    }
+}
+
+pub(crate) fn collect_block(height: u64) -> Option<BlockAndReceipts> {
+    let ingest_dir = "/home/user/personal/evm-blocks";
+    let f = ((height - 1) / 1_000_000) * 1_000_000;
+    let s = ((height - 1) / 1_000) * 1_000;
+    let path = format!("{}/{f}/{s}/{height}.rmp.lz4", ingest_dir);
+    if std::path::Path::new(&path).exists() {
+        let file = std::fs::File::open(path).unwrap();
+        let file = std::io::BufReader::new(file);
+        let mut decoder = lz4_flex::frame::FrameDecoder::new(file);
+        let blocks: Vec<BlockAndReceipts> = rmp_serde::from_read(&mut decoder).unwrap();
+        Some(blocks[0].clone())
+    } else {
+        None
     }
 }
 
@@ -292,12 +334,17 @@ mod tests {
 
     impl EngineResponses {
         fn both_valid() -> Self {
-            Self { new_payload: PayloadStatusEnum::Valid, fcu: PayloadStatusEnum::Valid }
+            Self {
+                new_payload: PayloadStatusEnum::Valid,
+                fcu: PayloadStatusEnum::Valid,
+            }
         }
 
         fn invalid_new_payload() -> Self {
             Self {
-                new_payload: PayloadStatusEnum::Invalid { validation_error: "test error".into() },
+                new_payload: PayloadStatusEnum::Invalid {
+                    validation_error: "test error".into(),
+                },
                 fcu: PayloadStatusEnum::Valid,
             }
         }
@@ -305,7 +352,9 @@ mod tests {
         fn invalid_fcu() -> Self {
             Self {
                 new_payload: PayloadStatusEnum::Valid,
-                fcu: PayloadStatusEnum::Invalid { validation_error: "fcu error".into() },
+                fcu: PayloadStatusEnum::Invalid {
+                    validation_error: "fcu error".into(),
+                },
             }
         }
     }
@@ -318,7 +367,9 @@ mod tests {
     impl TestFixture {
         /// Create a new test fixture with the given engine responses
         async fn new(responses: EngineResponses) -> Self {
-            let consensus = Arc::new(HlConsensus { provider: MockProvider });
+            let consensus = Arc::new(HlConsensus {
+                provider: MockProvider,
+            });
             let (to_engine, from_engine) = mpsc::unbounded_channel();
             let engine_handle = BeaconConsensusEngineHandle::new(to_engine);
 
@@ -382,9 +433,15 @@ mod tests {
                 read_precompile_calls: None,
             },
         };
-        let new_block = HlNewBlock(NewBlock { block, td: U128::from(1) });
+        let new_block = HlNewBlock(NewBlock {
+            block,
+            td: U128::from(1),
+        });
         let hash = new_block.0.block.header.hash_slow();
-        NewBlockMessage { hash, block: Arc::new(new_block) }
+        NewBlockMessage {
+            hash,
+            block: Arc::new(new_block),
+        }
     }
 
     /// Helper function to handle engine messages with specified payload statuses

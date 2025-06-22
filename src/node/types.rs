@@ -9,11 +9,15 @@ use reth_primitives::{SealedBlock, Transaction};
 use revm::primitives::HashMap;
 use serde::{Deserialize, Serialize};
 
+use crate::HlBlock;
+
 pub type ReadPrecompileCall = (Address, Vec<(ReadPrecompileInput, ReadPrecompileResult)>);
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, Default)]
 pub struct ReadPrecompileCalls(pub Vec<ReadPrecompileCall>);
 pub type ReadPrecompileMap = HashMap<Address, HashMap<ReadPrecompileInput, ReadPrecompileResult>>;
+
+mod reth_compat;
 
 impl From<ReadPrecompileCalls> for ReadPrecompileMap {
     fn from(calls: ReadPrecompileCalls) -> Self {
@@ -59,9 +63,16 @@ pub struct BlockAndReceipts {
     pub read_precompile_calls: ReadPrecompileCalls,
 }
 
+impl BlockAndReceipts {
+    pub fn to_reth_block(self) -> HlBlock {
+        let EvmBlock::Reth115(block) = self.block;
+        block.to_reth_block(self.read_precompile_calls.clone())
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum EvmBlock {
-    Reth115(SealedBlock),
+    Reth115(reth_compat::SealedBlock),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -83,7 +94,7 @@ enum LegacyTxType {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SystemTx {
-    pub tx: Transaction,
+    pub tx: reth_compat::Transaction,
     pub receipt: Option<LegacyReceipt>,
 }
 
