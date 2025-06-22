@@ -8732,6 +8732,7 @@ dependencies = [
  "once_cell",
  "parity-bytes",
  "parking_lot",
+ "reqwest",
  "reth",
  "reth-basic-payload-builder",
  "reth-chainspec",
