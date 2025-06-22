@@ -1,12 +1,53 @@
 use alloy_chains::{Chain, NamedChain};
 use alloy_primitives::{b256, Address, Bytes, B256, B64, U256};
-use std::sync::Arc;
-use once_cell::sync::Lazy;
-use reth_chainspec::{ChainSpec, DEV_HARDFORKS};
+use reth_chainspec::{ChainHardforks, ChainSpec, EthereumHardfork, ForkCondition, Hardfork};
 use reth_primitives::{Header, SealedHeader};
+use std::sync::LazyLock;
 
 static GENESIS_HASH: B256 =
     b256!("d8fcc13b6a195b88b7b2da3722ff6cad767b13a8c1e9ffb1c73aa9d216d895f0");
+
+/// Dev hardforks
+pub static HL_HARDFORKS: LazyLock<ChainHardforks> = LazyLock::new(|| {
+    ChainHardforks::new(vec![
+        (EthereumHardfork::Frontier.boxed(), ForkCondition::Block(0)),
+        (EthereumHardfork::Homestead.boxed(), ForkCondition::Block(0)),
+        (EthereumHardfork::Dao.boxed(), ForkCondition::Block(0)),
+        (EthereumHardfork::Tangerine.boxed(), ForkCondition::Block(0)),
+        (
+            EthereumHardfork::SpuriousDragon.boxed(),
+            ForkCondition::Block(0),
+        ),
+        (EthereumHardfork::Byzantium.boxed(), ForkCondition::Block(0)),
+        (
+            EthereumHardfork::Constantinople.boxed(),
+            ForkCondition::Block(0),
+        ),
+        (
+            EthereumHardfork::Petersburg.boxed(),
+            ForkCondition::Block(0),
+        ),
+        (EthereumHardfork::Istanbul.boxed(), ForkCondition::Block(0)),
+        (EthereumHardfork::Berlin.boxed(), ForkCondition::Block(0)),
+        (EthereumHardfork::London.boxed(), ForkCondition::Block(0)),
+        (
+            EthereumHardfork::Paris.boxed(),
+            ForkCondition::TTD {
+                activation_block_number: 0,
+                fork_block: None,
+                total_difficulty: U256::ZERO,
+            },
+        ),
+        (
+            EthereumHardfork::Shanghai.boxed(),
+            ForkCondition::Timestamp(0),
+        ),
+        (
+            EthereumHardfork::Cancun.boxed(),
+            ForkCondition::Timestamp(0),
+        ),
+    ])
+});
 
 /// The Hyperliqiud Mainnet spec
 pub fn hl_mainnet() -> ChainSpec {
@@ -16,7 +57,7 @@ pub fn hl_mainnet() -> ChainSpec {
             .expect("Can't deserialize Hyperliquid Mainnet genesis json"),
         genesis_header: empty_genesis_header(),
         paris_block_and_final_difficulty: Some((0, U256::from(0))),
-        hardforks: DEV_HARDFORKS.clone(),
+        hardforks: HL_HARDFORKS.clone(),
         prune_delete_limit: 10000,
         ..Default::default()
     }
