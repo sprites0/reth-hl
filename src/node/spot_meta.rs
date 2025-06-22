@@ -37,25 +37,24 @@ impl SpotId {
     }
 }
 
-async fn fetch_spot_meta(chain_id: u64) -> Result<SpotMeta> {
+fn fetch_spot_meta(chain_id: u64) -> Result<SpotMeta> {
     let url = match chain_id {
         MAINNET_CHAIN_ID => "https://api.hyperliquid.xyz/info",
         TESTNET_CHAIN_ID => "https://api.hyperliquid-testnet.xyz/info",
         _ => return Err(Error::msg("unknown chain id")),
     };
-    let client = reqwest::Client::new();
-    let response = client
-        .post(url)
-        .json(&serde_json::json!({"type": "spotMeta"}))
-        .send()
-        .await?;
-    Ok(response.json().await?)
+    let response = ureq::post(url)
+        .header("Content-Type", "application/json")
+        .send(serde_json::json!({"type": "spotMeta"}).to_string())?
+        .into_body()
+        .read_to_string()?;
+    Ok(serde_json::from_str(&response)?)
 }
 
-pub(crate) async fn erc20_contract_to_spot_token(
+pub(crate) fn erc20_contract_to_spot_token(
     chain_id: u64,
 ) -> Result<BTreeMap<Address, SpotId>> {
-    let meta = fetch_spot_meta(chain_id).await?;
+    let meta = fetch_spot_meta(chain_id)?;
     let mut map = BTreeMap::new();
     for token in &meta.tokens {
         if let Some(evm_contract) = &token.evm_contract {

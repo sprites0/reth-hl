@@ -104,14 +104,7 @@ fn system_tx_to_reth_transaction(
                     to
                 );
                 let rt = Handle::current();
-                futures::executor::block_on(async {
-                    rt.spawn(async move {
-                        *EVM_MAP.lock().unwrap() =
-                            erc20_contract_to_spot_token(chain_id).await.unwrap();
-                    })
-                    .await
-                    .expect("failed to spawn");
-                });
+                *EVM_MAP.lock().unwrap() = erc20_contract_to_spot_token(chain_id).unwrap();
             }
         };
         let signature = Signature::new(U256::from(0x1), s, true);
