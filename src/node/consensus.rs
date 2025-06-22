@@ -70,11 +70,11 @@ impl<ChainSpec: EthChainSpec + HlHardforks> HeaderValidator for HlConsensus<Chai
 
         validate_against_parent_timestamp(header.header(), parent.header())?;
 
-        validate_against_parent_eip1559_base_fee(
-            header.header(),
-            parent.header(),
-            &self.chain_spec,
-        )?;
+        // validate_against_parent_eip1559_base_fee(
+        //     header.header(),
+        //     parent.header(),
+        //     &self.chain_spec,
+        // )?;
 
         // ensure that the blob gas fields for this block
         if let Some(blob_params) = self.chain_spec.blob_params_at_timestamp(header.timestamp) {
