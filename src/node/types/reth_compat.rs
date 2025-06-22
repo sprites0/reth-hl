@@ -1,10 +1,19 @@
 //! Copy of reth codebase to preserve serialization compatibility
-use alloy_consensus::{Header, Signed, TxEip1559, TxEip2930, TxEip4844, TxEip7702, TxLegacy};
+use alloy_consensus::{
+    Header, Signed, TxEip1559, TxEip2930, TxEip4844, TxEip7702, TxLegacy, TypedTransaction,
+};
+use alloy_primitives::{Address, BlockHash, Signature, TxKind, U256};
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
+use std::sync::{Arc, LazyLock, Mutex};
+use tokio::runtime::Handle;
+use tracing::info;
 
-use alloy_primitives::{BlockHash, Signature};
-
-use crate::{node::types::ReadPrecompileCalls, HlBlock, HlBlockBody};
+use crate::node::spot_meta::{self, erc20_contract_to_spot_token, SpotId};
+use crate::{
+    node::types::{ReadPrecompileCalls, SystemTx},
+    HlBlock, HlBlockBody,
+};
 
 /// A raw transaction.
 ///
@@ -69,16 +78,69 @@ pub struct SealedBlock {
     body: BlockBody,
 }
 
+fn system_tx_to_reth_transaction(
+    transaction: &SystemTx,
+    chain_id: u64,
+) -> reth_primitives::TransactionSigned {
+    static EVM_MAP: LazyLock<Arc<Mutex<BTreeMap<Address, SpotId>>>> =
+        LazyLock::new(|| Arc::new(Mutex::new(BTreeMap::new())));
+    {
+        let Transaction::Legacy(tx) = &transaction.tx else {
+            panic!("Unexpected transaction type");
+        };
+        let TxKind::Call(to) = tx.to else {
+            panic!("Unexpected contract creation");
+        };
+        let s = if tx.input.is_empty() {
+            U256::from(0x1)
+        } else {
+            loop {
+                if let Some(spot) = EVM_MAP.lock().unwrap().get(&to) {
+                    break spot.to_s();
+                }
+
+                info!(
+                    "Contract not found: {:?} from spot mapping, fetching again...",
+                    to
+                );
+                let rt = Handle::current();
+                futures::executor::block_on(async {
+                    rt.spawn(async move {
+                        *EVM_MAP.lock().unwrap() =
+                            erc20_contract_to_spot_token(chain_id).await.unwrap();
+                    })
+                    .await
+                    .expect("failed to spawn");
+                });
+            }
+        };
+        let signature = Signature::new(U256::from(0x1), s, true);
+        reth_primitives::TransactionSigned::Legacy(Signed::new_unhashed(tx.clone(), signature))
+    }
+}
+
 impl SealedBlock {
-    pub fn to_reth_block(&self, read_precompile_calls: ReadPrecompileCalls) -> HlBlock {
+    pub fn to_reth_block(
+        &self,
+        read_precompile_calls: ReadPrecompileCalls,
+        system_txs: Vec<super::SystemTx>,
+        chain_id: u64,
+    ) -> HlBlock {
+        let mut merged_txs = vec![];
+        merged_txs.extend(
+            system_txs
+                .iter()
+                .map(|tx| system_tx_to_reth_transaction(tx, chain_id)),
+        );
+        merged_txs.extend(
+            self.body
+                .transactions
+                .iter()
+                .map(|tx| tx.to_reth_transaction()),
+        );
         let block_body = HlBlockBody {
             inner: reth_primitives::BlockBody {
-                transactions: self
-                    .body
-                    .transactions
-                    .iter()
-                    .map(|tx| tx.to_reth_transaction())
-                    .collect(),
+                transactions: merged_txs,
                 withdrawals: self.body.withdrawals.clone(),
                 ommers: self.body.ommers.clone(),
             },
