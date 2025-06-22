@@ -11,6 +11,7 @@ use crate::{
     HlBlock,
 };
 use alloy_rlp::{Decodable, Encodable};
+use reth_provider::BlockNumReader;
 // use handshake::HlHandshake;
 use reth::{
     api::{FullNodeTypes, TxTy},
@@ -182,6 +183,7 @@ impl HlNetworkBuilder {
         let consensus = Arc::new(HlConsensus {
             provider: ctx.provider().clone(),
         });
+        let number = ctx.provider().last_block_number().unwrap_or(1);
 
         ctx.task_executor()
             .spawn_critical("block import", async move {
@@ -193,7 +195,7 @@ impl HlNetworkBuilder {
                     .await
                     .unwrap();
 
-                ImportService::new(consensus, handle, from_network, to_network)
+                ImportService::new(consensus, handle, from_network, to_network, number)
                     .await
                     .unwrap();
             });

@@ -77,6 +77,7 @@ where
         engine: BeaconConsensusEngineHandle<HlPayloadTypes>,
         from_network: UnboundedReceiver<IncomingBlock>,
         to_network: UnboundedSender<ImportEvent>,
+        height: u64,
     ) -> Self {
         Self {
             engine,
@@ -84,7 +85,7 @@ where
             from_network,
             to_network,
             pending_imports: FuturesUnordered::new(),
-            height: 2000000,
+            height,
         }
     }
 
@@ -175,9 +176,14 @@ where
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let this = self.get_mut();
+        let prev_height = this.height;
 
         // Receive new blocks from network
         while let Some(block) = collect_block(this.height) {
+            if this.height > prev_height + 1000 {
+                break;
+            }
+
             let peer_id = PeerId::random();
             let reth_block = block.to_reth_block();
             let td = U128::from(reth_block.header().difficulty());
@@ -190,10 +196,6 @@ where
             };
             this.on_new_block(msg, peer_id);
             this.height += 1;
-
-            if this.height > 2000000 {
-                break;
-            }
         }
 
         // Process completed imports and send events to network
@@ -380,7 +382,7 @@ mod tests {
 
             let handle = ImportHandle::new(to_import, import_outcome);
 
-            let service = ImportService::new(consensus, engine_handle, from_network, to_network);
+            let service = ImportService::new(consensus, engine_handle, from_network, to_network, 1);
             tokio::spawn(Box::pin(async move {
                 service.await.unwrap();
             }));
