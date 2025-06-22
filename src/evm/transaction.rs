@@ -1,4 +1,5 @@
 use alloy_consensus::Transaction as AlloyTransaction;
+use alloy_primitives::address;
 use alloy_rpc_types::AccessList;
 use auto_impl::auto_impl;
 use reth_evm::{FromRecoveredTx, FromTxWithEncoded, IntoTxEnv, TransactionEnv};
@@ -131,8 +132,23 @@ impl<T: revm::context::Transaction> IntoTxEnv<Self> for HlTxEnv<T> {
     }
 }
 
+fn s_to_address(s: U256) -> Address {
+    if s == U256::ONE {
+        return address!("2222222222222222222222222222222222222222");
+    }
+    let mut buf = [0u8; 20];
+    buf.copy_from_slice(&s.to_be_bytes::<32>()[12..]);
+    Address::from_slice(&buf)
+}
+
 impl FromRecoveredTx<TransactionSigned> for HlTxEnv<TxEnv> {
     fn from_recovered_tx(tx: &TransactionSigned, sender: Address) -> Self {
+        if let Some(gas_price) = tx.gas_price() {
+            if gas_price == 0 {
+                return Self::new(TxEnv::from_recovered_tx(tx, s_to_address(tx.signature().s())));
+            }
+        }
+
         Self::new(TxEnv::from_recovered_tx(tx, sender))
     }
 }
@@ -154,7 +170,7 @@ impl FromTxWithEncoded<TransactionSigned> for HlTxEnv<TxEnv> {
 
         Self {
             base,
-            is_system_transaction
+            is_system_transaction,
         }
     }
 }
