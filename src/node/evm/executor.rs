@@ -22,7 +22,7 @@ use revm::{
     DatabaseCommit,
 };
 
-fn is_system_transaction(tx: &TransactionSigned) -> bool {
+pub fn is_system_transaction(tx: &TransactionSigned) -> bool {
     let Some(gas_price) = tx.gas_price() else {
         return false;
     };
@@ -143,7 +143,9 @@ where
         let ResultAndState { result, mut state } = result_and_state;
         f(&result);
         let gas_used = result.gas_used();
-        self.gas_used += gas_used;
+        if !is_system_transaction(tx.tx()) {
+            self.gas_used += gas_used;
+        }
         self.receipts
             .push(self.receipt_builder.build_receipt(ReceiptBuilderCtx {
                 tx: tx.tx(),
