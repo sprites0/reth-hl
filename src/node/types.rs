@@ -5,11 +5,10 @@
 use alloy_primitives::{Address, Bytes, Log};
 use alloy_rlp::{Decodable, Encodable, RlpDecodable, RlpEncodable};
 use bytes::BufMut;
-use reth_primitives::{SealedBlock, Transaction};
 use revm::primitives::HashMap;
 use serde::{Deserialize, Serialize};
 
-use crate::HlBlock;
+use crate::{node::spot_meta::MAINNET_CHAIN_ID, HlBlock};
 
 pub type ReadPrecompileCall = (Address, Vec<(ReadPrecompileInput, ReadPrecompileResult)>);
 
@@ -66,7 +65,11 @@ pub struct BlockAndReceipts {
 impl BlockAndReceipts {
     pub fn to_reth_block(self) -> HlBlock {
         let EvmBlock::Reth115(block) = self.block;
-        block.to_reth_block(self.read_precompile_calls.clone())
+        block.to_reth_block(
+            self.read_precompile_calls.clone(),
+            self.system_txs.clone(),
+            MAINNET_CHAIN_ID,
+        )
     }
 }
 
