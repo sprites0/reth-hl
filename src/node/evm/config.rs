@@ -3,7 +3,7 @@ use crate::{
     chainspec::HlChainSpec,
     evm::{spec::HlSpecId, transaction::HlTxEnv},
     hardforks::HlHardforks,
-    node::types::ReadPrecompileMap,
+    node::{evm::executor::is_system_transaction, types::ReadPrecompileMap},
     HlBlock, HlBlockBody, HlPrimitives,
 };
 use alloy_consensus::{BlockHeader, Header, Transaction as _, TxReceipt, EMPTY_OMMER_ROOT_HASH};
@@ -72,8 +72,20 @@ where
 
         let timestamp = evm_env.block_env.timestamp;
 
-        let transactions_root = proofs::calculate_transaction_root(&transactions);
-        let receipts_root = Receipt::calculate_receipt_root_no_memo(receipts);
+        // Filter out system tx receipts
+        let transactions_for_root: Vec<TransactionSigned> = transactions
+            .iter()
+            .filter(|t| !is_system_transaction(t))
+            .cloned()
+            .collect::<Vec<_>>();
+        let receipts_for_root: Vec<Receipt> = receipts
+            .iter()
+            .filter(|r| r.cumulative_gas_used() != 0)
+            .cloned()
+            .collect::<Vec<_>>();
+
+        let transactions_root = proofs::calculate_transaction_root(&transactions_for_root);
+        let receipts_root = Receipt::calculate_receipt_root_no_memo(&receipts_for_root);
         let logs_bloom = logs_bloom(receipts.iter().flat_map(|r| r.logs()));
 
         let withdrawals = inner
@@ -318,6 +330,10 @@ where
         if let Some(blob_params) = &blob_params {
             cfg_env.set_blob_max_count(blob_params.max_blob_count);
         }
+
+        // TODO: enable only for system transactions
+        cfg_env.disable_base_fee = true;
+        cfg_env.disable_eip3607 = true;
 
         // derive the EIP-4844 blob fees from the header's `excess_blob_gas` and the current
         // blobparams
