@@ -37,6 +37,7 @@ pub mod evm;
 pub mod network;
 pub mod primitives;
 pub mod rpc;
+pub mod spot_meta;
 pub mod storage;
 pub mod types;
 
