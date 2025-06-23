@@ -1,7 +1,6 @@
 use crate::{
     evm::{
         api::{ctx::HlContext, HlEvmInner},
-        precompiles::HlPrecompiles,
         spec::HlSpecId,
         transaction::{HlTxEnv, HlTxTr},
     },
@@ -19,7 +18,7 @@ use revm::{
         result::{EVMError, HaltReason, ResultAndState},
         BlockEnv, TxEnv,
     },
-    handler::{instructions::EthInstructions, PrecompileProvider},
+    handler::{instructions::EthInstructions, EthPrecompiles, PrecompileProvider},
     interpreter::{interpreter::EthInterpreter, InterpreterResult},
     Context, Database, ExecuteEvm, InspectEvm, Inspector,
 };
@@ -36,7 +35,7 @@ mod patch;
 /// This is a wrapper type around the `revm` evm with optional [`Inspector`] (tracing)
 /// support. [`Inspector`] support is configurable at runtime because it's part of the underlying
 #[allow(missing_debug_implementations)]
-pub struct HlEvm<DB: Database, I, P = HlPrecompiles> {
+pub struct HlEvm<DB: Database, I, P = EthPrecompiles> {
     pub inner: HlEvmInner<HlContext<DB>, I, EthInstructions<EthInterpreter, HlContext<DB>>, P>,
     pub inspect: bool,
 }

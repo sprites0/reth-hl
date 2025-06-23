@@ -1,10 +1,8 @@
-use super::precompiles::HlPrecompiles;
 use revm::{
     context::{ContextSetters, Evm as EvmCtx},
     context_interface::ContextTr,
     handler::{
-        instructions::{EthInstructions, InstructionProvider},
-        EvmTr, PrecompileProvider,
+        instructions::{EthInstructions, InstructionProvider}, EthPrecompiles, EvmTr, PrecompileProvider
     },
     inspector::{InspectorEvmTr, JournalExt},
     interpreter::{interpreter::EthInterpreter, Interpreter, InterpreterAction, InterpreterTypes},
@@ -15,19 +13,19 @@ pub mod builder;
 pub mod ctx;
 mod exec;
 
-pub struct HlEvmInner<CTX, INSP, I = EthInstructions<EthInterpreter, CTX>, P = HlPrecompiles>(
+pub struct HlEvmInner<CTX, INSP, I = EthInstructions<EthInterpreter, CTX>, P = EthPrecompiles>(
     pub EvmCtx<CTX, INSP, I, P>,
 );
 
 impl<CTX: ContextTr, INSP>
-    HlEvmInner<CTX, INSP, EthInstructions<EthInterpreter, CTX>, HlPrecompiles>
+    HlEvmInner<CTX, INSP, EthInstructions<EthInterpreter, CTX>, EthPrecompiles>
 {
     pub fn new(ctx: CTX, inspector: INSP) -> Self {
         Self(EvmCtx {
             ctx,
             inspector,
             instruction: EthInstructions::new_mainnet(),
-            precompiles: HlPrecompiles::default(),
+            precompiles: EthPrecompiles::default(),
         })
     }
 

@@ -5,11 +5,9 @@ use crate::{
             builder::HlBuilder,
             ctx::{DefaultHl, HlContext},
         },
-        precompiles::HlPrecompiles,
         spec::HlSpecId,
         transaction::HlTxEnv,
     },
-    node::types::ReadPrecompileMap,
 };
 use reth_evm::{precompiles::PrecompilesMap, EvmEnv, EvmFactory};
 use reth_revm::{Context, Database};
@@ -18,6 +16,7 @@ use revm::{
         result::{EVMError, HaltReason},
         TxEnv,
     },
+    handler::EthPrecompiles,
     inspector::NoOpInspector,
     Inspector,
 };
@@ -42,15 +41,15 @@ impl EvmFactory for HlEvmFactory {
         db: DB,
         input: EvmEnv<HlSpecId>,
     ) -> Self::Evm<DB, NoOpInspector> {
-        let precompiles =
-            HlPrecompiles::new(input.cfg_env.spec, ReadPrecompileMap::default()).precompiles();
         HlEvm {
             inner: Context::hl()
                 .with_block(input.block_env)
                 .with_cfg(input.cfg_env)
                 .with_db(db)
                 .build_hl_with_inspector(NoOpInspector {})
-                .with_precompiles(PrecompilesMap::from_static(precompiles)),
+                .with_precompiles(PrecompilesMap::from_static(
+                    EthPrecompiles::default().precompiles,
+                )),
             inspect: false,
         }
     }
@@ -64,15 +63,15 @@ impl EvmFactory for HlEvmFactory {
         input: EvmEnv<HlSpecId>,
         inspector: I,
     ) -> Self::Evm<DB, I> {
-        let precompiles =
-            HlPrecompiles::new(input.cfg_env.spec, ReadPrecompileMap::default()).precompiles();
         HlEvm {
             inner: Context::hl()
                 .with_block(input.block_env)
                 .with_cfg(input.cfg_env)
                 .with_db(db)
                 .build_hl_with_inspector(inspector)
-                .with_precompiles(PrecompilesMap::from_static(precompiles)),
+                .with_precompiles(PrecompilesMap::from_static(
+                    EthPrecompiles::default().precompiles,
+                )),
             inspect: true,
         }
     }
