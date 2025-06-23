@@ -1,10 +1,6 @@
-use alloy_primitives::{address, b256, Address, B256, U256};
+use alloy_primitives::{address, Address};
 use reth_evm::block::BlockExecutionError;
-use reth_primitives_traits::SignedTransaction;
-use reth_revm::{db::states::StorageSlot, State};
-use revm::{primitives::HashMap, state::Account, Database};
-use std::{str::FromStr, sync::LazyLock};
-use tracing::trace;
+use revm::{primitives::HashMap, state::Account};
 
 /// Applies storage patches to the state after a transaction is executed.
 /// See https://github.com/hyperliquid-dex/hyper-evm-sync/commit/39047242b6260f7764527a2f5057dd9c3a75aa89 for more details.

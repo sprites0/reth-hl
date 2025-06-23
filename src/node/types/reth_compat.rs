@@ -9,7 +9,7 @@ use std::sync::{Arc, LazyLock, Mutex};
 use tokio::runtime::Handle;
 use tracing::info;
 
-use crate::node::spot_meta::{self, erc20_contract_to_spot_token, SpotId};
+use crate::node::spot_meta::{erc20_contract_to_spot_token, SpotId};
 use crate::{
     node::types::{ReadPrecompileCalls, SystemTx},
     HlBlock, HlBlockBody,
@@ -103,7 +103,6 @@ fn system_tx_to_reth_transaction(
                     "Contract not found: {:?} from spot mapping, fetching again...",
                     to
                 );
-                let rt = Handle::current();
                 *EVM_MAP.lock().unwrap() = erc20_contract_to_spot_token(chain_id).unwrap();
             }
         };
