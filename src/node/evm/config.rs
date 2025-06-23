@@ -16,6 +16,7 @@ use reth_evm::{
     block::{BlockExecutionError, BlockExecutorFactory, BlockExecutorFor},
     eth::{receipt_builder::ReceiptBuilder, EthBlockExecutionCtx},
     execute::{BlockAssembler, BlockAssemblerInput},
+    precompiles::PrecompilesMap,
     ConfigureEvm, EvmEnv, EvmFactory, ExecutionCtxFor, FromRecoveredTx, FromTxWithEncoded,
     IntoTxEnv, NextBlockEnvAttributes,
 };
@@ -260,14 +261,17 @@ impl<R, Spec, EvmFactory> HlBlockExecutorFactory<R, Spec, EvmFactory> {
 #[derive(Debug, Clone)]
 pub struct HlBlockExecutionCtx<'a> {
     ctx: EthBlockExecutionCtx<'a>,
-    read_precompile_calls: ReadPrecompileMap,
+    pub read_precompile_calls: ReadPrecompileMap,
 }
 
 impl<R, Spec, EvmF> BlockExecutorFactory for HlBlockExecutorFactory<R, Spec, EvmF>
 where
     R: ReceiptBuilder<Transaction = TransactionSigned, Receipt: TxReceipt<Log = Log>>,
     Spec: EthereumHardforks + HlHardforks + EthChainSpec + Hardforks + Clone,
-    EvmF: EvmFactory<Tx: FromRecoveredTx<TransactionSigned> + FromTxWithEncoded<TransactionSigned>>,
+    EvmF: EvmFactory<
+        Tx: FromRecoveredTx<TransactionSigned> + FromTxWithEncoded<TransactionSigned>,
+        Precompiles = PrecompilesMap,
+    >,
     R::Transaction: From<TransactionSigned> + Clone,
     Self: 'static,
     HlTxEnv<TxEnv>: IntoTxEnv<<EvmF as EvmFactory>::Tx>,

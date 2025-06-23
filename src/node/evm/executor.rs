@@ -1,14 +1,20 @@
 use super::config::HlBlockExecutionCtx;
 use super::patch::patch_mainnet_after_tx;
-use crate::{evm::transaction::HlTxEnv, hardforks::HlHardforks, node::types::ReadPrecompileCalls};
+use crate::{
+    evm::transaction::HlTxEnv,
+    hardforks::HlHardforks,
+    node::types::{ReadPrecompileCalls, ReadPrecompileInput, ReadPrecompileResult},
+};
 use alloy_consensus::{Transaction, TxReceipt};
 use alloy_eips::{eip7685::Requests, Encodable2718};
 use alloy_evm::{block::ExecutableTx, eth::receipt_builder::ReceiptBuilderCtx};
+use alloy_primitives::Bytes;
 use reth_chainspec::{EthChainSpec, EthereumHardforks, Hardforks};
 use reth_evm::{
     block::{BlockValidationError, CommitChanges},
     eth::receipt_builder::ReceiptBuilder,
     execute::{BlockExecutionError, BlockExecutor},
+    precompiles::{DynPrecompile, PrecompilesMap},
     Database, Evm, FromRecoveredTx, FromTxWithEncoded, IntoTxEnv, OnStateHook, RecoveredTx,
 };
 use reth_primitives::TransactionSigned;
@@ -18,8 +24,7 @@ use revm::{
     context::{
         result::{ExecutionResult, ResultAndState},
         TxEnv,
-    },
-    DatabaseCommit,
+    }, precompile::{PrecompileError, PrecompileOutput, PrecompileResult}, primitives::HashMap, DatabaseCommit
 };
 
 pub fn is_system_transaction(tx: &TransactionSigned) -> bool {
@@ -51,11 +56,46 @@ where
     ctx: HlBlockExecutionCtx<'a>,
 }
 
+fn run_precompile(
+    precompile_calls: &HashMap<ReadPrecompileInput, ReadPrecompileResult>,
+    data: &[u8],
+    gas_limit: u64,
+) -> PrecompileResult {
+    let input = ReadPrecompileInput {
+        input: Bytes::copy_from_slice(data),
+        gas_limit,
+    };
+    let Some(get) = precompile_calls.get(&input) else {
+        return Err(PrecompileError::OutOfGas);
+    };
+
+    return match *get {
+        ReadPrecompileResult::Ok {
+            gas_used,
+            ref bytes,
+        } => {
+            Ok(PrecompileOutput {
+                gas_used,
+                bytes: bytes.clone(),
+            })
+        }
+        ReadPrecompileResult::OutOfGas => {
+            // Use all the gas passed to this precompile
+            Err(PrecompileError::OutOfGas)
+        }
+        ReadPrecompileResult::Error => {
+            Err(PrecompileError::OutOfGas)
+        }
+        ReadPrecompileResult::UnexpectedError => panic!("unexpected precompile error"),
+    };
+}
+
 impl<'a, DB, EVM, Spec, R: ReceiptBuilder> HlBlockExecutor<'a, EVM, Spec, R>
 where
     DB: Database + 'a,
     EVM: Evm<
         DB = &'a mut State<DB>,
+        Precompiles = PrecompilesMap,
         Tx: FromRecoveredTx<R::Transaction>
                 + FromRecoveredTx<TransactionSigned>
                 + FromTxWithEncoded<TransactionSigned>,
@@ -68,14 +108,31 @@ where
     R::Transaction: Into<TransactionSigned>,
 {
     /// Creates a new HlBlockExecutor.
-    pub fn new(evm: EVM, ctx: HlBlockExecutionCtx<'a>, spec: Spec, receipt_builder: R) -> Self {
+    pub fn new(mut evm: EVM, ctx: HlBlockExecutionCtx<'a>, spec: Spec, receipt_builder: R) -> Self {
+        let precompiles_mut = evm.precompiles_mut();
+        // For all precompile addresses just in case it's populated and not cleared
+        // Clear 0x00...08xx addresses
+        let addresses = precompiles_mut.addresses().cloned().collect::<Vec<_>>();
+        for address in addresses {
+            if address.starts_with(&[0u8; 18]) && address[19] == 8 {
+                precompiles_mut.apply_precompile(&address, |_| None);
+            }
+        }
+        for (address, precompile) in ctx.read_precompile_calls.iter() {
+            let precompile = precompile.clone();
+            precompiles_mut.apply_precompile(address, |_| {
+                Some(DynPrecompile::from(move |data: &[u8], gas: u64| {
+                    run_precompile(&precompile, data, gas)
+                }))
+            });
+        }
         Self {
             spec,
             evm,
             gas_used: 0,
             receipts: vec![],
             system_txs: vec![],
-            read_precompile_calls: ReadPrecompileCalls::default(),
+            read_precompile_calls: ctx.read_precompile_calls.clone().into(),
             receipt_builder,
             // system_contracts,
             ctx,
