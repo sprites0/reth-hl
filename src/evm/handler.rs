@@ -72,14 +72,6 @@ where
         self.mainnet.validate_initial_tx_gas(evm)
     }
 
-    fn reward_beneficiary(
-        &self,
-        evm: &mut Self::Evm,
-        exec_result: &mut <Self::Frame as Frame>::FrameResult,
-    ) -> Result<(), Self::Error> {
-        Ok(())
-    }
-
     fn output(
         &self,
         evm: &mut Self::Evm,
