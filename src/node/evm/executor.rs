@@ -146,14 +146,6 @@ where
         if !is_system_transaction(tx.tx()) {
             self.gas_used += gas_used;
         }
-        self.receipts
-            .push(self.receipt_builder.build_receipt(ReceiptBuilderCtx {
-                tx: tx.tx(),
-                evm: &self.evm,
-                result,
-                state: &state,
-                cumulative_gas_used: self.gas_used,
-            }));
 
         // apply patches after
         patch_mainnet_after_tx(
@@ -162,6 +154,15 @@ where
             is_system_transaction(tx.tx()),
             &mut state,
         )?;
+
+        self.receipts
+            .push(self.receipt_builder.build_receipt(ReceiptBuilderCtx {
+                tx: tx.tx(),
+                evm: &self.evm,
+                result,
+                state: &state,
+                cumulative_gas_used: self.gas_used,
+            }));
 
         self.evm.db_mut().commit(state);
 
