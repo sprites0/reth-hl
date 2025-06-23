@@ -184,6 +184,7 @@ impl HlNetworkBuilder {
             provider: ctx.provider().clone(),
         });
         let number = ctx.provider().last_block_number().unwrap_or(1);
+        let number = std::cmp::max(number, 1);
 
         ctx.task_executor()
             .spawn_critical("block import", async move {
