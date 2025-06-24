@@ -99,11 +99,10 @@ where
 
             match engine.new_payload(payload).await {
                 Ok(payload_status) => match payload_status.status {
-                    PayloadStatusEnum::Valid => Outcome {
-                        peer: peer_id,
-                        result: Ok(BlockValidation::ValidBlock { block }),
+                    PayloadStatusEnum::Valid => {
+                        Outcome { peer: peer_id, result: Ok(BlockValidation::ValidBlock { block }) }
+                            .into()
                     }
-                    .into(),
                     PayloadStatusEnum::Invalid { validation_error } => Outcome {
                         peer: peer_id,
                         result: Err(BlockImportError::Other(validation_error.into())),
@@ -136,16 +135,13 @@ where
                 finalized_block_hash: head_block_hash,
             };
 
-            match engine
-                .fork_choice_updated(state, None, EngineApiMessageVersion::default())
-                .await
+            match engine.fork_choice_updated(state, None, EngineApiMessageVersion::default()).await
             {
                 Ok(response) => match response.payload_status.status {
-                    PayloadStatusEnum::Valid => Outcome {
-                        peer: peer_id,
-                        result: Ok(BlockValidation::ValidBlock { block }),
+                    PayloadStatusEnum::Valid => {
+                        Outcome { peer: peer_id, result: Ok(BlockValidation::ValidBlock { block }) }
+                            .into()
                     }
-                    .into(),
                     PayloadStatusEnum::Invalid { validation_error } => Outcome {
                         peer: peer_id,
                         result: Err(BlockImportError::Other(validation_error.into())),
@@ -189,10 +185,7 @@ where
             let td = U128::from(reth_block.header().difficulty());
             let msg = NewBlockMessage {
                 hash: reth_block.header().hash_slow(),
-                block: Arc::new(HlNewBlock(NewBlock {
-                    block: reth_block,
-                    td,
-                })),
+                block: Arc::new(HlNewBlock(NewBlock { block: reth_block, td })),
             };
             this.on_new_block(msg, peer_id);
             this.height += 1;
@@ -336,17 +329,12 @@ mod tests {
 
     impl EngineResponses {
         fn both_valid() -> Self {
-            Self {
-                new_payload: PayloadStatusEnum::Valid,
-                fcu: PayloadStatusEnum::Valid,
-            }
+            Self { new_payload: PayloadStatusEnum::Valid, fcu: PayloadStatusEnum::Valid }
         }
 
         fn invalid_new_payload() -> Self {
             Self {
-                new_payload: PayloadStatusEnum::Invalid {
-                    validation_error: "test error".into(),
-                },
+                new_payload: PayloadStatusEnum::Invalid { validation_error: "test error".into() },
                 fcu: PayloadStatusEnum::Valid,
             }
         }
@@ -354,9 +342,7 @@ mod tests {
         fn invalid_fcu() -> Self {
             Self {
                 new_payload: PayloadStatusEnum::Valid,
-                fcu: PayloadStatusEnum::Invalid {
-                    validation_error: "fcu error".into(),
-                },
+                fcu: PayloadStatusEnum::Invalid { validation_error: "fcu error".into() },
             }
         }
     }
@@ -369,9 +355,7 @@ mod tests {
     impl TestFixture {
         /// Create a new test fixture with the given engine responses
         async fn new(responses: EngineResponses) -> Self {
-            let consensus = Arc::new(HlConsensus {
-                provider: MockProvider,
-            });
+            let consensus = Arc::new(HlConsensus { provider: MockProvider });
             let (to_engine, from_engine) = mpsc::unbounded_channel();
             let engine_handle = BeaconConsensusEngineHandle::new(to_engine);
 
@@ -435,15 +419,9 @@ mod tests {
                 read_precompile_calls: None,
             },
         };
-        let new_block = HlNewBlock(NewBlock {
-            block,
-            td: U128::from(1),
-        });
+        let new_block = HlNewBlock(NewBlock { block, td: U128::from(1) });
         let hash = new_block.0.block.header.hash_slow();
-        NewBlockMessage {
-            hash,
-            block: Arc::new(new_block),
-        }
+        NewBlockMessage { hash, block: Arc::new(new_block) }
     }
 
     /// Helper function to handle engine messages with specified payload statuses

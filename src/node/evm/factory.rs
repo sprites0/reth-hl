@@ -1,13 +1,11 @@
 use super::HlEvm;
-use crate::{
-    evm::{
-        api::{
-            builder::HlBuilder,
-            ctx::{DefaultHl, HlContext},
-        },
-        spec::HlSpecId,
-        transaction::HlTxEnv,
+use crate::evm::{
+    api::{
+        builder::HlBuilder,
+        ctx::{DefaultHl, HlContext},
     },
+    spec::HlSpecId,
+    transaction::HlTxEnv,
 };
 use reth_evm::{precompiles::PrecompilesMap, EvmEnv, EvmFactory};
 use reth_revm::{Context, Database};

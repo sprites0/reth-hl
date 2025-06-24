@@ -71,12 +71,7 @@ mod rlp {
                         header,
                         body:
                             HlBlockBody {
-                                inner:
-                                    BlockBody {
-                                        transactions,
-                                        ommers,
-                                        withdrawals,
-                                    },
+                                inner: BlockBody { transactions, ommers, withdrawals },
                                 sidecars,
                                 read_precompile_calls,
                             },
@@ -111,13 +106,7 @@ mod rlp {
     impl Decodable for HlNewBlock {
         fn decode(buf: &mut &[u8]) -> alloy_rlp::Result<Self> {
             let HlNewBlockHelper {
-                block:
-                    BlockHelper {
-                        header,
-                        transactions,
-                        ommers,
-                        withdrawals,
-                    },
+                block: BlockHelper { header, transactions, ommers, withdrawals },
                 td,
                 sidecars,
                 read_precompile_calls,
@@ -180,26 +169,21 @@ impl HlNetworkBuilder {
         let (to_network, import_outcome) = mpsc::unbounded_channel();
 
         let handle = ImportHandle::new(to_import, import_outcome);
-        let consensus = Arc::new(HlConsensus {
-            provider: ctx.provider().clone(),
-        });
+        let consensus = Arc::new(HlConsensus { provider: ctx.provider().clone() });
         let number = ctx.provider().last_block_number().unwrap_or(1);
         let number = std::cmp::max(number, 1);
 
-        ctx.task_executor()
-            .spawn_critical("block import", async move {
-                let handle = engine_handle_rx
-                    .lock()
-                    .await
-                    .take()
-                    .expect("node should only be launched once")
-                    .await
-                    .unwrap();
+        ctx.task_executor().spawn_critical("block import", async move {
+            let handle = engine_handle_rx
+                .lock()
+                .await
+                .take()
+                .expect("node should only be launched once")
+                .await
+                .unwrap();
 
-                ImportService::new(consensus, handle, from_network, to_network, number)
-                    .await
-                    .unwrap();
-            });
+            ImportService::new(consensus, handle, from_network, to_network, number).await.unwrap();
+        });
 
         let network_builder = network_builder
             .boot_nodes(boot_nodes())

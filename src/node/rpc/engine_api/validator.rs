@@ -37,9 +37,7 @@ where
     type Validator = HlEngineValidator;
 
     async fn build(self, ctx: &AddOnsContext<'_, Node>) -> eyre::Result<Self::Validator> {
-        Ok(HlEngineValidator::new(Arc::new(
-            ctx.config.chain.clone().as_ref().clone(),
-        )))
+        Ok(HlEngineValidator::new(Arc::new(ctx.config.chain.clone().as_ref().clone())))
     }
 }
 
@@ -52,9 +50,7 @@ pub struct HlEngineValidator {
 impl HlEngineValidator {
     /// Instantiates a new validator.
     pub fn new(chain_spec: Arc<HlChainSpec>) -> Self {
-        Self {
-            inner: HlExecutionPayloadValidator { inner: chain_spec },
-        }
+        Self { inner: HlExecutionPayloadValidator { inner: chain_spec } }
     }
 }
 
@@ -99,13 +95,9 @@ impl PayloadValidator for HlEngineValidator {
         &self,
         payload: Self::ExecutionData,
     ) -> Result<RecoveredBlock<Self::Block>, NewPayloadError> {
-        let sealed_block = self
-            .inner
-            .ensure_well_formed_payload(payload)
-            .map_err(NewPayloadError::other)?;
-        sealed_block
-            .try_recover()
-            .map_err(|e| NewPayloadError::Other(e.into()))
+        let sealed_block =
+            self.inner.ensure_well_formed_payload(payload).map_err(NewPayloadError::other)?;
+        sealed_block.try_recover().map_err(|e| NewPayloadError::Other(e.into()))
     }
 
     fn validate_block_post_execution_with_hashed_state(

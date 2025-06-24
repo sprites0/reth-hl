@@ -18,9 +18,7 @@ pub struct HlHandler<EVM, ERROR, FRAME> {
 
 impl<EVM, ERROR, FRAME> HlHandler<EVM, ERROR, FRAME> {
     pub fn new() -> Self {
-        Self {
-            mainnet: MainnetHandler::default(),
-        }
+        Self { mainnet: MainnetHandler::default() }
     }
 }
 
@@ -87,14 +85,12 @@ where
                 logs,
                 output,
             },
-            SuccessOrHalt::Revert => ExecutionResult::Revert {
-                gas_used: final_gas_used,
-                output: output.into_data(),
-            },
-            SuccessOrHalt::Halt(reason) => ExecutionResult::Halt {
-                reason,
-                gas_used: final_gas_used,
-            },
+            SuccessOrHalt::Revert => {
+                ExecutionResult::Revert { gas_used: final_gas_used, output: output.into_data() }
+            }
+            SuccessOrHalt::Halt(reason) => {
+                ExecutionResult::Halt { reason, gas_used: final_gas_used }
+            }
             // Only two internal return flags.
             flag @ (SuccessOrHalt::FatalExternalError | SuccessOrHalt::Internal(_)) => {
                 panic!(

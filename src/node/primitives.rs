@@ -46,13 +46,13 @@ pub struct HlBlockBody {
 
 impl InMemorySize for HlBlockBody {
     fn size(&self) -> usize {
-        self.inner.size()
-            + self.sidecars.as_ref().map_or(0, |s| {
-                s.capacity() * core::mem::size_of::<BlobTransactionSidecar>()
-            })
-            + self.read_precompile_calls.as_ref().map_or(0, |s| {
-                s.0.capacity() * core::mem::size_of::<ReadPrecompileCall>()
-            })
+        self.inner.size() +
+            self.sidecars
+                .as_ref()
+                .map_or(0, |s| s.capacity() * core::mem::size_of::<BlobTransactionSidecar>()) +
+            self.read_precompile_calls
+                .as_ref()
+                .map_or(0, |s| s.0.capacity() * core::mem::size_of::<ReadPrecompileCall>())
     }
 }
 
@@ -156,12 +156,7 @@ mod rlp {
     impl<'a> From<&'a HlBlockBody> for BlockBodyHelper<'a> {
         fn from(value: &'a HlBlockBody) -> Self {
             let HlBlockBody {
-                inner:
-                    BlockBody {
-                        transactions,
-                        ommers,
-                        withdrawals,
-                    },
+                inner: BlockBody { transactions, ommers, withdrawals },
                 sidecars,
                 read_precompile_calls,
             } = value;
@@ -182,12 +177,7 @@ mod rlp {
                 header,
                 body:
                     HlBlockBody {
-                        inner:
-                            BlockBody {
-                                transactions,
-                                ommers,
-                                withdrawals,
-                            },
+                        inner: BlockBody { transactions, ommers, withdrawals },
                         sidecars,
                         read_precompile_calls,
                     },
@@ -300,11 +290,7 @@ pub mod serde_bincode_compat {
         }
 
         fn from_repr(repr: Self::BincodeRepr<'_>) -> Self {
-            let HlBlockBodyBincode {
-                inner,
-                sidecars,
-                read_precompile_calls,
-            } = repr;
+            let HlBlockBodyBincode { inner, sidecars, read_precompile_calls } = repr;
             Self {
                 inner: BlockBody::from_repr(inner),
                 sidecars: sidecars.map(|s| s.into_owned()),
@@ -317,18 +303,12 @@ pub mod serde_bincode_compat {
         type BincodeRepr<'a> = HlBlockBincode<'a>;
 
         fn as_repr(&self) -> Self::BincodeRepr<'_> {
-            HlBlockBincode {
-                header: self.header.as_repr(),
-                body: self.body.as_repr(),
-            }
+            HlBlockBincode { header: self.header.as_repr(), body: self.body.as_repr() }
         }
 
         fn from_repr(repr: Self::BincodeRepr<'_>) -> Self {
             let HlBlockBincode { header, body } = repr;
-            Self {
-                header: Header::from_repr(header),
-                body: HlBlockBody::from_repr(body),
-            }
+            Self { header: Header::from_repr(header), body: HlBlockBody::from_repr(body) }
         }
     }
 }

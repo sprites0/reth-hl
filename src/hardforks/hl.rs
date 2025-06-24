@@ -40,19 +40,19 @@ impl HlHardfork {
         match_hardfork(
             fork,
             |fork| match fork {
-                EthereumHardfork::Frontier
-                | EthereumHardfork::Homestead
-                | EthereumHardfork::Tangerine
-                | EthereumHardfork::SpuriousDragon
-                | EthereumHardfork::Byzantium
-                | EthereumHardfork::Constantinople
-                | EthereumHardfork::Petersburg
-                | EthereumHardfork::Istanbul
-                | EthereumHardfork::MuirGlacier
-                | EthereumHardfork::Berlin
-                | EthereumHardfork::London
-                | EthereumHardfork::Shanghai
-                | EthereumHardfork::Cancun => Some(0),
+                EthereumHardfork::Frontier |
+                EthereumHardfork::Homestead |
+                EthereumHardfork::Tangerine |
+                EthereumHardfork::SpuriousDragon |
+                EthereumHardfork::Byzantium |
+                EthereumHardfork::Constantinople |
+                EthereumHardfork::Petersburg |
+                EthereumHardfork::Istanbul |
+                EthereumHardfork::MuirGlacier |
+                EthereumHardfork::Berlin |
+                EthereumHardfork::London |
+                EthereumHardfork::Shanghai |
+                EthereumHardfork::Cancun => Some(0),
                 _ => None,
             },
             |fork| match fork {
@@ -68,24 +68,12 @@ impl HlHardfork {
             (EthereumHardfork::Frontier.boxed(), ForkCondition::Block(0)),
             (EthereumHardfork::Homestead.boxed(), ForkCondition::Block(0)),
             (EthereumHardfork::Tangerine.boxed(), ForkCondition::Block(0)),
-            (
-                EthereumHardfork::SpuriousDragon.boxed(),
-                ForkCondition::Block(0),
-            ),
+            (EthereumHardfork::SpuriousDragon.boxed(), ForkCondition::Block(0)),
             (EthereumHardfork::Byzantium.boxed(), ForkCondition::Block(0)),
-            (
-                EthereumHardfork::Constantinople.boxed(),
-                ForkCondition::Block(0),
-            ),
-            (
-                EthereumHardfork::Petersburg.boxed(),
-                ForkCondition::Block(0),
-            ),
+            (EthereumHardfork::Constantinople.boxed(), ForkCondition::Block(0)),
+            (EthereumHardfork::Petersburg.boxed(), ForkCondition::Block(0)),
             (EthereumHardfork::Istanbul.boxed(), ForkCondition::Block(0)),
-            (
-                EthereumHardfork::MuirGlacier.boxed(),
-                ForkCondition::Block(0),
-            ),
+            (EthereumHardfork::MuirGlacier.boxed(), ForkCondition::Block(0)),
             (EthereumHardfork::Berlin.boxed(), ForkCondition::Block(0)),
             (EthereumHardfork::London.boxed(), ForkCondition::Block(0)),
             (EthereumHardfork::Shanghai.boxed(), ForkCondition::Block(0)),

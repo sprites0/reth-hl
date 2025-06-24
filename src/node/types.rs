@@ -20,11 +20,7 @@ mod reth_compat;
 
 impl From<ReadPrecompileCalls> for ReadPrecompileMap {
     fn from(calls: ReadPrecompileCalls) -> Self {
-        calls
-            .0
-            .into_iter()
-            .map(|(address, calls)| (address, calls.into_iter().collect()))
-            .collect()
+        calls.0.into_iter().map(|(address, calls)| (address, calls.into_iter().collect())).collect()
     }
 }
 

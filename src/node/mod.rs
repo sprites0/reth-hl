@@ -53,17 +53,9 @@ pub struct HlNode {
 }
 
 impl HlNode {
-    pub fn new() -> (
-        Self,
-        oneshot::Sender<BeaconConsensusEngineHandle<HlPayloadTypes>>,
-    ) {
+    pub fn new() -> (Self, oneshot::Sender<BeaconConsensusEngineHandle<HlPayloadTypes>>) {
         let (tx, rx) = oneshot::channel();
-        (
-            Self {
-                engine_handle_rx: Arc::new(Mutex::new(Some(rx))),
-            },
-            tx,
-        )
+        (Self { engine_handle_rx: Arc::new(Mutex::new(Some(rx))) }, tx)
     }
 }
 
@@ -86,9 +78,7 @@ impl HlNode {
             .pool(EthereumPoolBuilder::default())
             .executor(HlExecutorBuilder::default())
             .payload(HlPayloadServiceBuilder::default())
-            .network(HlNetworkBuilder {
-                engine_handle_rx: self.engine_handle_rx.clone(),
-            })
+            .network(HlNetworkBuilder { engine_handle_rx: self.engine_handle_rx.clone() })
             .consensus(HlConsensusBuilder::default())
     }
 }
@@ -134,12 +124,7 @@ where
     type RpcBlock = alloy_rpc_types::Block;
 
     fn rpc_to_primitive_block(rpc_block: Self::RpcBlock) -> HlBlock {
-        let alloy_rpc_types::Block {
-            header,
-            transactions,
-            withdrawals,
-            ..
-        } = rpc_block;
+        let alloy_rpc_types::Block { header, transactions, withdrawals, .. } = rpc_block;
         HlBlock {
             header: header.inner,
             body: HlBlockBody {

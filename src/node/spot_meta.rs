@@ -51,9 +51,7 @@ fn fetch_spot_meta(chain_id: u64) -> Result<SpotMeta> {
     Ok(serde_json::from_str(&response)?)
 }
 
-pub(crate) fn erc20_contract_to_spot_token(
-    chain_id: u64,
-) -> Result<BTreeMap<Address, SpotId>> {
+pub(crate) fn erc20_contract_to_spot_token(chain_id: u64) -> Result<BTreeMap<Address, SpotId>> {
     let meta = fetch_spot_meta(chain_id)?;
     let mut map = BTreeMap::new();
     for token in &meta.tokens {

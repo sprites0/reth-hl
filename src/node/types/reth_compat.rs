@@ -1,16 +1,18 @@
 //! Copy of reth codebase to preserve serialization compatibility
-use alloy_consensus::{
-    Header, Signed, TxEip1559, TxEip2930, TxEip4844, TxEip7702, TxLegacy,
-};
+use alloy_consensus::{Header, Signed, TxEip1559, TxEip2930, TxEip4844, TxEip7702, TxLegacy};
 use alloy_primitives::{Address, BlockHash, Signature, TxKind, U256};
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
-use std::sync::{Arc, LazyLock, Mutex};
+use std::{
+    collections::BTreeMap,
+    sync::{Arc, LazyLock, Mutex},
+};
 use tracing::info;
 
-use crate::node::spot_meta::{erc20_contract_to_spot_token, SpotId};
 use crate::{
-    node::types::{ReadPrecompileCalls, SystemTx},
+    node::{
+        spot_meta::{erc20_contract_to_spot_token, SpotId},
+        types::{ReadPrecompileCalls, SystemTx},
+    },
     HlBlock, HlBlockBody,
 };
 
@@ -98,10 +100,7 @@ fn system_tx_to_reth_transaction(
                     break spot.to_s();
                 }
 
-                info!(
-                    "Contract not found: {:?} from spot mapping, fetching again...",
-                    to
-                );
+                info!("Contract not found: {:?} from spot mapping, fetching again...", to);
                 *EVM_MAP.lock().unwrap() = erc20_contract_to_spot_token(chain_id).unwrap();
             }
         };
@@ -118,17 +117,8 @@ impl SealedBlock {
         chain_id: u64,
     ) -> HlBlock {
         let mut merged_txs = vec![];
-        merged_txs.extend(
-            system_txs
-                .iter()
-                .map(|tx| system_tx_to_reth_transaction(tx, chain_id)),
-        );
-        merged_txs.extend(
-            self.body
-                .transactions
-                .iter()
-                .map(|tx| tx.to_reth_transaction()),
-        );
+        merged_txs.extend(system_txs.iter().map(|tx| system_tx_to_reth_transaction(tx, chain_id)));
+        merged_txs.extend(self.body.transactions.iter().map(|tx| tx.to_reth_transaction()));
         let block_body = HlBlockBody {
             inner: reth_primitives::BlockBody {
                 transactions: merged_txs,
@@ -138,10 +128,7 @@ impl SealedBlock {
             sidecars: None,
             read_precompile_calls: Some(read_precompile_calls),
         };
-        
-        HlBlock {
-            header: self.header.header.clone(),
-            body: block_body,
-        }
+
+        HlBlock { header: self.header.header.clone(), body: block_body }
     }
 }

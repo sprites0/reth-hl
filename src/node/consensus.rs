@@ -1,8 +1,4 @@
-use crate::{
-    hardforks::HlHardforks,
-    node::HlNode,
-    {HlBlock, HlBlockBody, HlPrimitives},
-};
+use crate::{hardforks::HlHardforks, node::HlNode, HlBlock, HlBlockBody, HlPrimitives};
 use alloy_consensus::BlockHeader as _;
 use alloy_eips::eip7685::Requests;
 use reth::{
@@ -50,10 +46,7 @@ pub struct HlConsensus<ChainSpec> {
 impl<ChainSpec: EthChainSpec + HlHardforks> HlConsensus<ChainSpec> {
     /// Create a new instance of [`HlConsensus`]
     pub fn new(chain_spec: Arc<ChainSpec>) -> Self {
-        Self {
-            inner: EthBeaconConsensus::new(chain_spec.clone()),
-            chain_spec,
-        }
+        Self { inner: EthBeaconConsensus::new(chain_spec.clone()), chain_spec }
     }
 }
 
@@ -166,16 +159,11 @@ where
     // - Filter out system transactions for receipts check
 
     // Check if gas used matches the value set in header.
-    let cumulative_gas_used = receipts
-        .last()
-        .map(|receipt| receipt.cumulative_gas_used())
-        .unwrap_or(0);
+    let cumulative_gas_used =
+        receipts.last().map(|receipt| receipt.cumulative_gas_used()).unwrap_or(0);
     if block.header().gas_used() != cumulative_gas_used {
         return Err(ConsensusError::BlockGasUsed {
-            gas: GotExpected {
-                got: cumulative_gas_used,
-                expected: block.header().gas_used(),
-            },
+            gas: GotExpected { got: cumulative_gas_used, expected: block.header().gas_used() },
             gas_spent_by_tx: gas_spent_by_transactions(receipts),
         });
     }
@@ -185,9 +173,8 @@ where
     // transaction This was replaced with is_success flag.
     // See more about EIP here: https://eips.ethereum.org/EIPS/eip-658
     if chain_spec.is_byzantium_active_at_block(block.header().number()) {
-        let receipts_for_root = receipts
-            .iter().filter(|&r| r.cumulative_gas_used() != 0).cloned()
-            .collect::<Vec<_>>();
+        let receipts_for_root =
+            receipts.iter().filter(|&r| r.cumulative_gas_used() != 0).cloned().collect::<Vec<_>>();
         if let Err(error) = verify_receipts(
             block.header().receipts_root(),
             block.header().logs_bloom(),

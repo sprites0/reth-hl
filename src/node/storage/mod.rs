@@ -1,7 +1,4 @@
-use crate::{
-    node::types::ReadPrecompileCalls,
-    {HlBlock, HlBlockBody, HlPrimitives},
-};
+use crate::{node::types::ReadPrecompileCalls, HlBlock, HlBlockBody, HlPrimitives};
 use alloy_consensus::BlockHeader;
 use alloy_primitives::Bytes;
 use reth_chainspec::EthereumHardforks;
@@ -31,9 +28,8 @@ impl HlStorage {
     where
         Provider: DBProvider<Tx: DbTxMut>,
     {
-        let mut precompile_calls_cursor = provider
-            .tx_ref()
-            .cursor_write::<tables::BlockReadPrecompileCalls>()?;
+        let mut precompile_calls_cursor =
+            provider.tx_ref().cursor_write::<tables::BlockReadPrecompileCalls>()?;
 
         for (block_number, read_precompile_calls) in inputs {
             let Some(read_precompile_calls) = read_precompile_calls else {
@@ -60,9 +56,8 @@ impl HlStorage {
         Provider: DBProvider<Tx: DbTx>,
     {
         let mut read_precompile_calls = Vec::with_capacity(inputs.len());
-        let mut precompile_calls_cursor = provider
-            .tx_ref()
-            .cursor_read::<tables::BlockReadPrecompileCalls>()?;
+        let mut precompile_calls_cursor =
+            provider.tx_ref().cursor_read::<tables::BlockReadPrecompileCalls>()?;
 
         for (header, _transactions) in inputs {
             let precompile_calls = precompile_calls_cursor
@@ -91,11 +86,7 @@ where
 
         for (block_number, body) in bodies {
             match body {
-                Some(HlBlockBody {
-                    inner,
-                    sidecars: _,
-                    read_precompile_calls: rpc,
-                }) => {
+                Some(HlBlockBody { inner, sidecars: _, read_precompile_calls: rpc }) => {
                     eth_bodies.push((block_number, Some(inner)));
                     read_precompile_calls.push((block_number, rpc));
                 }
@@ -118,11 +109,8 @@ where
         block: u64,
         remove_from: StorageLocation,
     ) -> ProviderResult<()> {
-        self.0
-            .remove_block_bodies_above(provider, block, remove_from)?;
-        provider
-            .tx_ref()
-            .unwind_table_by_num::<tables::BlockReadPrecompileCalls>(block)?;
+        self.0.remove_block_bodies_above(provider, block, remove_from)?;
+        provider.tx_ref().unwind_table_by_num::<tables::BlockReadPrecompileCalls>(block)?;
 
         Ok(())
     }

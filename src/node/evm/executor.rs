@@ -1,5 +1,4 @@
-use super::config::HlBlockExecutionCtx;
-use super::patch::patch_mainnet_after_tx;
+use super::{config::HlBlockExecutionCtx, patch::patch_mainnet_after_tx};
 use crate::{
     evm::transaction::HlTxEnv,
     hardforks::HlHardforks,
@@ -24,7 +23,10 @@ use revm::{
     context::{
         result::{ExecutionResult, ResultAndState},
         TxEnv,
-    }, precompile::{PrecompileError, PrecompileOutput, PrecompileResult}, primitives::HashMap, DatabaseCommit
+    },
+    precompile::{PrecompileError, PrecompileOutput, PrecompileResult},
+    primitives::HashMap,
+    DatabaseCommit,
 };
 
 pub fn is_system_transaction(tx: &TransactionSigned) -> bool {
@@ -59,31 +61,20 @@ fn run_precompile(
     data: &[u8],
     gas_limit: u64,
 ) -> PrecompileResult {
-    let input = ReadPrecompileInput {
-        input: Bytes::copy_from_slice(data),
-        gas_limit,
-    };
+    let input = ReadPrecompileInput { input: Bytes::copy_from_slice(data), gas_limit };
     let Some(get) = precompile_calls.get(&input) else {
         return Err(PrecompileError::OutOfGas);
     };
 
     match *get {
-        ReadPrecompileResult::Ok {
-            gas_used,
-            ref bytes,
-        } => {
-            Ok(PrecompileOutput {
-                gas_used,
-                bytes: bytes.clone(),
-            })
+        ReadPrecompileResult::Ok { gas_used, ref bytes } => {
+            Ok(PrecompileOutput { gas_used, bytes: bytes.clone() })
         }
         ReadPrecompileResult::OutOfGas => {
             // Use all the gas passed to this precompile
             Err(PrecompileError::OutOfGas)
         }
-        ReadPrecompileResult::Error => {
-            Err(PrecompileError::OutOfGas)
-        }
+        ReadPrecompileResult::Error => Err(PrecompileError::OutOfGas),
         ReadPrecompileResult::UnexpectedError => panic!("unexpected precompile error"),
     }
 }
@@ -124,14 +115,7 @@ where
                 }))
             });
         }
-        Self {
-            spec,
-            evm,
-            gas_used: 0,
-            receipts: vec![],
-            receipt_builder,
-            ctx,
-        }
+        Self { spec, evm, gas_used: 0, receipts: vec![], receipt_builder, ctx }
     }
 }
 
@@ -180,13 +164,11 @@ where
 
         let block_available_gas = self.evm.block().gas_limit - self.gas_used;
         if tx.tx().gas_limit() > block_available_gas {
-            return Err(
-                BlockValidationError::TransactionGasLimitMoreThanAvailableBlockGas {
-                    transaction_gas_limit: tx.tx().gas_limit(),
-                    block_available_gas,
-                }
-                .into(),
-            );
+            return Err(BlockValidationError::TransactionGasLimitMoreThanAvailableBlockGas {
+                transaction_gas_limit: tx.tx().gas_limit(),
+                block_available_gas,
+            }
+            .into());
         }
         let result_and_state = self
             .evm
@@ -207,14 +189,13 @@ where
             &mut state,
         )?;
 
-        self.receipts
-            .push(self.receipt_builder.build_receipt(ReceiptBuilderCtx {
-                tx: tx.tx(),
-                evm: &self.evm,
-                result,
-                state: &state,
-                cumulative_gas_used: self.gas_used,
-            }));
+        self.receipts.push(self.receipt_builder.build_receipt(ReceiptBuilderCtx {
+            tx: tx.tx(),
+            evm: &self.evm,
+            result,
+            state: &state,
+            cumulative_gas_used: self.gas_used,
+        }));
 
         self.evm.db_mut().commit(state);
 

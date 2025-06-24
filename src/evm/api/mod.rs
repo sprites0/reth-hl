@@ -2,7 +2,8 @@ use revm::{
     context::{ContextSetters, Evm as EvmCtx},
     context_interface::ContextTr,
     handler::{
-        instructions::{EthInstructions, InstructionProvider}, EthPrecompiles, EvmTr, PrecompileProvider
+        instructions::{EthInstructions, InstructionProvider},
+        EthPrecompiles, EvmTr, PrecompileProvider,
     },
     inspector::{InspectorEvmTr, JournalExt},
     interpreter::{interpreter::EthInterpreter, Interpreter, InterpreterAction, InterpreterTypes},

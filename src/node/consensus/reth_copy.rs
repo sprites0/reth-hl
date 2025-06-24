@@ -14,16 +14,11 @@ pub(super) fn verify_receipts<R: Receipt>(
     receipts: &[R],
 ) -> Result<(), ConsensusError> {
     // Calculate receipts root.
-    let receipts_with_bloom = receipts
-        .iter()
-        .map(TxReceipt::with_bloom_ref)
-        .collect::<Vec<_>>();
+    let receipts_with_bloom = receipts.iter().map(TxReceipt::with_bloom_ref).collect::<Vec<_>>();
     let receipts_root = calculate_receipt_root(&receipts_with_bloom);
 
     // Calculate header logs bloom.
-    let logs_bloom = receipts_with_bloom
-        .iter()
-        .fold(Bloom::ZERO, |bloom, r| bloom | r.bloom_ref());
+    let logs_bloom = receipts_with_bloom.iter().fold(Bloom::ZERO, |bloom, r| bloom | r.bloom_ref());
 
     compare_receipts_root_and_logs_bloom(
         receipts_root,
@@ -45,21 +40,13 @@ pub(super) fn compare_receipts_root_and_logs_bloom(
 ) -> Result<(), ConsensusError> {
     if calculated_receipts_root != expected_receipts_root {
         return Err(ConsensusError::BodyReceiptRootDiff(
-            GotExpected {
-                got: calculated_receipts_root,
-                expected: expected_receipts_root,
-            }
-            .into(),
+            GotExpected { got: calculated_receipts_root, expected: expected_receipts_root }.into(),
         ));
     }
 
     if calculated_logs_bloom != expected_logs_bloom {
         return Err(ConsensusError::BodyBloomLogDiff(
-            GotExpected {
-                got: calculated_logs_bloom,
-                expected: expected_logs_bloom,
-            }
-            .into(),
+            GotExpected { got: calculated_logs_bloom, expected: expected_logs_bloom }.into(),
         ));
     }
 

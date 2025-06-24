@@ -27,9 +27,7 @@ impl<T: Transaction> HlTxEnv<T> {
 
 impl Default for HlTxEnv<TxEnv> {
     fn default() -> Self {
-        Self {
-            base: TxEnv::default(),
-        }
+        Self { base: TxEnv::default() }
     }
 }
 
@@ -133,10 +131,7 @@ impl FromRecoveredTx<TransactionSigned> for HlTxEnv<TxEnv> {
     fn from_recovered_tx(tx: &TransactionSigned, sender: Address) -> Self {
         if let Some(gas_price) = tx.gas_price() {
             if gas_price == 0 {
-                return Self::new(TxEnv::from_recovered_tx(
-                    tx,
-                    s_to_address(tx.signature().s()),
-                ));
+                return Self::new(TxEnv::from_recovered_tx(tx, s_to_address(tx.signature().s())));
             }
         }
 

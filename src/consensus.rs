@@ -32,10 +32,8 @@ where
         number: BlockNumber,
     ) -> Result<(B256, B256), HlConsensusErr> {
         let current_head = self.provider.best_block_number()?;
-        let current_hash = self
-            .provider
-            .block_hash(current_head)?
-            .ok_or(HlConsensusErr::HeadHashNotFound)?;
+        let current_hash =
+            self.provider.block_hash(current_head)?.ok_or(HlConsensusErr::HeadHashNotFound)?;
 
         match number.cmp(&current_head) {
             Ordering::Greater => Ok((hash, current_hash)),
@@ -64,11 +62,7 @@ mod tests {
         fn new(head_number: BlockNumber, head_hash: B256) -> Self {
             let mut blocks = HashMap::new();
             blocks.insert(head_number, head_hash);
-            Self {
-                blocks,
-                head_number,
-                head_hash,
-            }
+            Self { blocks, head_number, head_hash }
         }
     }
 
@@ -88,10 +82,7 @@ mod tests {
 
     impl BlockNumReader for MockProvider {
         fn chain_info(&self) -> Result<ChainInfo, ProviderError> {
-            Ok(ChainInfo {
-                best_hash: self.head_hash,
-                best_number: self.head_number,
-            })
+            Ok(ChainInfo { best_hash: self.head_hash, best_number: self.head_number })
         }
 
         fn best_block_number(&self) -> Result<BlockNumber, ProviderError> {
@@ -103,10 +94,7 @@ mod tests {
         }
 
         fn block_number(&self, hash: B256) -> Result<Option<BlockNumber>, ProviderError> {
-            Ok(self
-                .blocks
-                .iter()
-                .find_map(|(num, h)| (*h == hash).then_some(*num)))
+            Ok(self.blocks.iter().find_map(|(num, h)| (*h == hash).then_some(*num)))
         }
     }
 

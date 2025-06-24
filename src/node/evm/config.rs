@@ -61,12 +61,7 @@ where
             execution_ctx: ctx,
             parent,
             transactions,
-            output:
-                BlockExecutionResult {
-                    receipts,
-                    requests,
-                    gas_used,
-                },
+            output: BlockExecutionResult { receipts, requests, gas_used },
             state_root,
             ..
         } = input;
@@ -74,16 +69,10 @@ where
         let timestamp = evm_env.block_env.timestamp;
 
         // Filter out system tx receipts
-        let transactions_for_root: Vec<TransactionSigned> = transactions
-            .iter()
-            .filter(|t| !is_system_transaction(t))
-            .cloned()
-            .collect::<Vec<_>>();
-        let receipts_for_root: Vec<Receipt> = receipts
-            .iter()
-            .filter(|r| r.cumulative_gas_used() != 0)
-            .cloned()
-            .collect::<Vec<_>>();
+        let transactions_for_root: Vec<TransactionSigned> =
+            transactions.iter().filter(|t| !is_system_transaction(t)).cloned().collect::<Vec<_>>();
+        let receipts_for_root: Vec<Receipt> =
+            receipts.iter().filter(|r| r.cumulative_gas_used() != 0).cloned().collect::<Vec<_>>();
 
         let transactions_root = proofs::calculate_transaction_root(&transactions_for_root);
         let receipts_root = Receipt::calculate_receipt_root_no_memo(&receipts_for_root);
@@ -92,16 +81,10 @@ where
         let withdrawals = inner
             .chain_spec
             .is_shanghai_active_at_timestamp(timestamp)
-            .then(|| {
-                ctx.ctx
-                    .withdrawals
-                    .map(|w| w.into_owned())
-                    .unwrap_or_default()
-            });
+            .then(|| ctx.ctx.withdrawals.map(|w| w.into_owned()).unwrap_or_default());
 
-        let withdrawals_root = withdrawals
-            .as_deref()
-            .map(|w| proofs::calculate_withdrawals_root(w));
+        let withdrawals_root =
+            withdrawals.as_deref().map(|w| proofs::calculate_withdrawals_root(w));
         let requests_hash = inner
             .chain_spec
             .is_prague_active_at_timestamp(timestamp)
@@ -112,16 +95,9 @@ where
 
         // only determine cancun fields when active
         if inner.chain_spec.is_cancun_active_at_timestamp(timestamp) {
-            blob_gas_used = Some(
-                transactions
-                    .iter()
-                    .map(|tx| tx.blob_gas_used().unwrap_or_default())
-                    .sum(),
-            );
-            excess_blob_gas = if inner
-                .chain_spec
-                .is_cancun_active_at_timestamp(parent.timestamp)
-            {
+            blob_gas_used =
+                Some(transactions.iter().map(|tx| tx.blob_gas_used().unwrap_or_default()).sum());
+            excess_blob_gas = if inner.chain_spec.is_cancun_active_at_timestamp(parent.timestamp) {
                 parent.maybe_next_block_excess_blob_gas(
                     inner.chain_spec.blob_params_at_timestamp(timestamp),
                 )
@@ -160,11 +136,7 @@ where
         Ok(Self::Block {
             header,
             body: HlBlockBody {
-                inner: BlockBody {
-                    transactions,
-                    ommers: Default::default(),
-                    withdrawals,
-                },
+                inner: BlockBody { transactions, ommers: Default::default(), withdrawals },
                 sidecars: None,
                 read_precompile_calls: Some(read_precompile_calls),
             },
@@ -174,9 +146,7 @@ where
 
 impl HlBlockAssembler {
     pub fn new(chain_spec: Arc<HlChainSpec>) -> Self {
-        Self {
-            inner: EthBlockAssembler::new(chain_spec),
-        }
+        Self { inner: EthBlockAssembler::new(chain_spec) }
     }
 }
 
@@ -240,11 +210,7 @@ impl<R, Spec, EvmFactory> HlBlockExecutorFactory<R, Spec, EvmFactory> {
     /// Creates a new [`HlBlockExecutorFactory`] with the given spec, [`EvmFactory`], and
     /// [`ReceiptBuilder`].
     pub const fn new(receipt_builder: R, spec: Spec, evm_factory: EvmFactory) -> Self {
-        Self {
-            receipt_builder,
-            spec,
-            evm_factory,
-        }
+        Self { receipt_builder, spec, evm_factory }
     }
 
     /// Exposes the receipt builder.
@@ -327,9 +293,8 @@ where
         );
 
         // configure evm env based on parent block
-        let mut cfg_env = CfgEnv::new()
-            .with_chain_id(self.chain_spec().chain().id())
-            .with_spec(spec);
+        let mut cfg_env =
+            CfgEnv::new().with_chain_id(self.chain_spec().chain().id()).with_spec(spec);
 
         if let Some(blob_params) = &blob_params {
             cfg_env.set_blob_max_count(blob_params.max_blob_count);
@@ -342,16 +307,10 @@ where
         // derive the EIP-4844 blob fees from the header's `excess_blob_gas` and the current
         // blobparams
         let blob_excess_gas_and_price =
-            header
-                .excess_blob_gas
-                .zip(blob_params)
-                .map(|(excess_blob_gas, params)| {
-                    let blob_gasprice = params.calc_blob_fee(excess_blob_gas);
-                    BlobExcessGasAndPrice {
-                        excess_blob_gas,
-                        blob_gasprice,
-                    }
-                });
+            header.excess_blob_gas.zip(blob_params).map(|(excess_blob_gas, params)| {
+                let blob_gasprice = params.calc_blob_fee(excess_blob_gas);
+                BlobExcessGasAndPrice { excess_blob_gas, blob_gasprice }
+            });
 
         let eth_spec = spec.into_eth_spec();
 
@@ -359,16 +318,8 @@ where
             number: header.number(),
             beneficiary: header.beneficiary(),
             timestamp: header.timestamp(),
-            difficulty: if eth_spec >= SpecId::MERGE {
-                U256::ZERO
-            } else {
-                header.difficulty()
-            },
-            prevrandao: if eth_spec >= SpecId::MERGE {
-                header.mix_hash()
-            } else {
-                None
-            },
+            difficulty: if eth_spec >= SpecId::MERGE { U256::ZERO } else { header.difficulty() },
+            prevrandao: if eth_spec >= SpecId::MERGE { header.mix_hash() } else { None },
             gas_limit: header.gas_limit(),
             basefee: header.base_fee_per_gas().unwrap_or_default(),
             blob_excess_gas_and_price,
@@ -390,23 +341,20 @@ where
         );
 
         // configure evm env based on parent block
-        let cfg_env = CfgEnv::new()
-            .with_chain_id(self.chain_spec().chain().id())
-            .with_spec(spec_id);
+        let cfg_env =
+            CfgEnv::new().with_chain_id(self.chain_spec().chain().id()).with_spec(spec_id);
 
         // if the parent block did not have excess blob gas (i.e. it was pre-cancun), but it is
         // cancun now, we need to set the excess blob gas to the default value(0)
         let blob_excess_gas_and_price = parent
             .maybe_next_block_excess_blob_gas(
-                self.chain_spec()
-                    .blob_params_at_timestamp(attributes.timestamp),
+                self.chain_spec().blob_params_at_timestamp(attributes.timestamp),
             )
             .or_else(|| (spec_id.into_eth_spec().is_enabled_in(SpecId::CANCUN)).then_some(0))
             .map(|gas| BlobExcessGasAndPrice::new(gas, false));
 
         let mut basefee = parent.next_block_base_fee(
-            self.chain_spec()
-                .base_fee_params_at_timestamp(attributes.timestamp),
+            self.chain_spec().base_fee_params_at_timestamp(attributes.timestamp),
         );
 
         let mut gas_limit = U256::from(parent.gas_limit);
@@ -486,9 +434,9 @@ where
 
 /// Map the latest active hardfork at the given timestamp or block number to a [`HlSpecId`].
 pub fn revm_spec_by_timestamp_and_block_number(
-    chain_spec: impl HlHardforks,
-    timestamp: u64,
-    block_number: u64,
+    _chain_spec: impl HlHardforks,
+    _timestamp: u64,
+    _block_number: u64,
 ) -> HlSpecId {
     HlSpecId::V1
 }
