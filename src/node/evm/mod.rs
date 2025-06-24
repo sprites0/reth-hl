@@ -2,7 +2,7 @@ use crate::{
     evm::{
         api::{ctx::HlContext, HlEvmInner},
         spec::HlSpecId,
-        transaction::{HlTxEnv, HlTxTr},
+        transaction::HlTxEnv,
     },
     node::HlNode,
 };
@@ -96,9 +96,6 @@ where
         tx: Self::Tx,
     ) -> Result<ResultAndState<Self::HaltReason>, Self::Error> {
         if self.inspect {
-            self.inner.set_tx(tx);
-            self.inner.inspect_replay()
-        } else if tx.is_system_transaction() {
             self.inner.set_tx(tx);
             self.inner.inspect_replay()
         } else {

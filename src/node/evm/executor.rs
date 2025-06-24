@@ -3,7 +3,7 @@ use super::patch::patch_mainnet_after_tx;
 use crate::{
     evm::transaction::HlTxEnv,
     hardforks::HlHardforks,
-    node::types::{ReadPrecompileCalls, ReadPrecompileInput, ReadPrecompileResult},
+    node::types::{ReadPrecompileInput, ReadPrecompileResult},
 };
 use alloy_consensus::{Transaction, TxReceipt};
 use alloy_eips::{eip7685::Requests, Encodable2718};
@@ -39,6 +39,7 @@ where
     Spec: EthChainSpec,
 {
     /// Reference to the specification object.
+    #[allow(dead_code)]
     spec: Spec,
     /// Inner EVM.
     evm: EVM,
@@ -46,13 +47,10 @@ where
     gas_used: u64,
     /// Receipts of executed transactions.
     receipts: Vec<R::Receipt>,
-    /// System txs
-    system_txs: Vec<R::Transaction>,
-    /// Read precompile calls
-    read_precompile_calls: ReadPrecompileCalls,
     /// Receipt builder.
     receipt_builder: R,
     /// Context for block execution.
+    #[allow(dead_code)]
     ctx: HlBlockExecutionCtx<'a>,
 }
 
@@ -131,10 +129,7 @@ where
             evm,
             gas_used: 0,
             receipts: vec![],
-            system_txs: vec![],
-            read_precompile_calls: ctx.read_precompile_calls.clone().into(),
             receipt_builder,
-            // system_contracts,
             ctx,
         }
     }

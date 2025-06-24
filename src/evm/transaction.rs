@@ -11,24 +11,17 @@ use revm::{
 };
 
 #[auto_impl(&, &mut, Box, Arc)]
-pub trait HlTxTr: Transaction {
-    /// Whether the transaction is a system transaction
-    fn is_system_transaction(&self) -> bool;
-}
+pub trait HlTxTr: Transaction {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct HlTxEnv<T: Transaction> {
     pub base: T,
-    pub is_system_transaction: bool,
 }
 
 impl<T: Transaction> HlTxEnv<T> {
     pub fn new(base: T) -> Self {
-        Self {
-            base,
-            is_system_transaction: false,
-        }
+        Self { base }
     }
 }
 
@@ -36,7 +29,6 @@ impl Default for HlTxEnv<TxEnv> {
     fn default() -> Self {
         Self {
             base: TxEnv::default(),
-            is_system_transaction: false,
         }
     }
 }
@@ -120,11 +112,7 @@ impl<T: Transaction> Transaction for HlTxEnv<T> {
     }
 }
 
-impl<T: Transaction> HlTxTr for HlTxEnv<T> {
-    fn is_system_transaction(&self) -> bool {
-        self.is_system_transaction
-    }
-}
+impl<T: Transaction> HlTxTr for HlTxEnv<T> {}
 
 impl<T: revm::context::Transaction> IntoTxEnv<Self> for HlTxEnv<T> {
     fn into_tx_env(self) -> Self {
@@ -145,7 +133,10 @@ impl FromRecoveredTx<TransactionSigned> for HlTxEnv<TxEnv> {
     fn from_recovered_tx(tx: &TransactionSigned, sender: Address) -> Self {
         if let Some(gas_price) = tx.gas_price() {
             if gas_price == 0 {
-                return Self::new(TxEnv::from_recovered_tx(tx, s_to_address(tx.signature().s())));
+                return Self::new(TxEnv::from_recovered_tx(
+                    tx,
+                    s_to_address(tx.signature().s()),
+                ));
             }
         }
 
@@ -163,15 +154,7 @@ impl FromTxWithEncoded<TransactionSigned> for HlTxEnv<TxEnv> {
             reth_primitives::Transaction::Eip7702(tx) => TxEnv::from_recovered_tx(&tx, sender),
         };
 
-        let is_system_transaction = match tx.gas_price() {
-            Some(x) => x == 0u128,
-            None => false,
-        };
-
-        Self {
-            base,
-            is_system_transaction,
-        }
+        Self { base }
     }
 }
 
@@ -190,30 +173,5 @@ impl<T: TransactionEnv> TransactionEnv for HlTxEnv<T> {
 
     fn set_access_list(&mut self, access_list: AccessList) {
         self.base.set_access_list(access_list);
-    }
-}
-
-#[cfg(test)]
-mod tests {
-
-    use super::*;
-    use revm::primitives::Address;
-
-    #[test]
-    fn test_hl_transaction_fields() {
-        let hl_tx = HlTxEnv {
-            base: TxEnv {
-                tx_type: 0,
-                gas_limit: 10,
-                gas_price: 100,
-                gas_priority_fee: Some(5),
-                ..Default::default()
-            },
-            is_system_transaction: false,
-        };
-
-        assert_eq!(hl_tx.tx_type(), 0);
-        assert_eq!(hl_tx.gas_limit(), 10);
-        assert_eq!(hl_tx.kind(), revm::primitives::TxKind::Call(Address::ZERO));
     }
 }

@@ -9,7 +9,7 @@ use revm::{
     context_interface::{result::ResultAndState, JournalTr},
     handler::{handler::EvmTrError, EvmTr, Frame, FrameResult, Handler, MainnetHandler},
     inspector::{Inspector, InspectorEvmTr, InspectorFrame, InspectorHandler},
-    interpreter::{interpreter::EthInterpreter, FrameInput, InitialAndFloorGas, SuccessOrHalt},
+    interpreter::{interpreter::EthInterpreter, FrameInput, SuccessOrHalt},
 };
 
 pub struct HlHandler<EVM, ERROR, FRAME> {
@@ -59,16 +59,6 @@ where
         &self,
         evm: &Self::Evm,
     ) -> Result<revm::interpreter::InitialAndFloorGas, Self::Error> {
-        let ctx = evm.ctx_ref();
-        let tx = ctx.tx();
-
-        if tx.is_system_transaction() {
-            return Ok(InitialAndFloorGas {
-                initial_gas: 0,
-                floor_gas: 0,
-            });
-        }
-
         self.mainnet.validate_initial_tx_gas(evm)
     }
 
@@ -79,13 +69,9 @@ where
     ) -> Result<ResultAndState<Self::HaltReason>, Self::Error> {
         let ctx = evm.ctx();
         ctx.error();
-        let tx = ctx.tx();
+
         // used gas with refund calculated.
-        let gas_refunded = if tx.is_system_transaction() {
-            0
-        } else {
-            result.gas().refunded() as u64
-        };
+        let gas_refunded = result.gas().refunded() as u64;
         let final_gas_used = result.gas().spent() - gas_refunded;
         let output = result.output();
         let instruction_result = result.into_interpreter_result();
