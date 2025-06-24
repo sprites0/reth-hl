@@ -186,9 +186,7 @@ where
     // See more about EIP here: https://eips.ethereum.org/EIPS/eip-658
     if chain_spec.is_byzantium_active_at_block(block.header().number()) {
         let receipts_for_root = receipts
-            .iter()
-            .cloned()
-            .filter(|r| r.cumulative_gas_used() != 0)
+            .iter().filter(|&r| r.cumulative_gas_used() != 0).cloned()
             .collect::<Vec<_>>();
         if let Err(error) = verify_receipts(
             block.header().receipts_root(),

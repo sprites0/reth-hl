@@ -69,7 +69,7 @@ fn run_precompile(
         return Err(PrecompileError::OutOfGas);
     };
 
-    return match *get {
+    match *get {
         ReadPrecompileResult::Ok {
             gas_used,
             ref bytes,
@@ -87,7 +87,7 @@ fn run_precompile(
             Err(PrecompileError::OutOfGas)
         }
         ReadPrecompileResult::UnexpectedError => panic!("unexpected precompile error"),
-    };
+    }
 }
 
 impl<'a, DB, EVM, Spec, R: ReceiptBuilder> HlBlockExecutor<'a, EVM, Spec, R>

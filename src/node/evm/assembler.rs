@@ -1,8 +1,8 @@
 use crate::{
     node::evm::config::{HlBlockExecutorFactory, HlEvmConfig},
-    HlBlock, HlBlockBody,
+    HlBlock,
 };
-use alloy_consensus::{Block, Header};
+use alloy_consensus::Header;
 use reth_evm::{
     block::BlockExecutionError,
     execute::{BlockAssembler, BlockAssemblerInput},

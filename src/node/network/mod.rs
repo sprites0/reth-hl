@@ -18,13 +18,13 @@ use reth::{
     builder::{components::NetworkBuilder, BuilderContext},
     transaction_pool::{PoolTransaction, TransactionPool},
 };
-use reth_discv4::{Discv4Config, NodeRecord};
+use reth_discv4::NodeRecord;
 use reth_engine_primitives::BeaconConsensusEngineHandle;
 use reth_eth_wire::{BasicNetworkPrimitives, NewBlock, NewBlockPayload};
 use reth_ethereum_primitives::PooledTransactionVariant;
 use reth_network::{NetworkConfig, NetworkHandle, NetworkManager};
 use reth_network_api::PeersInfo;
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
 use tokio::sync::{mpsc, oneshot, Mutex};
 use tracing::info;
 

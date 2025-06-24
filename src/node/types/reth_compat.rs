@@ -1,12 +1,11 @@
 //! Copy of reth codebase to preserve serialization compatibility
 use alloy_consensus::{
-    Header, Signed, TxEip1559, TxEip2930, TxEip4844, TxEip7702, TxLegacy, TypedTransaction,
+    Header, Signed, TxEip1559, TxEip2930, TxEip4844, TxEip7702, TxLegacy,
 };
 use alloy_primitives::{Address, BlockHash, Signature, TxKind, U256};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::sync::{Arc, LazyLock, Mutex};
-use tokio::runtime::Handle;
 use tracing::info;
 
 use crate::node::spot_meta::{erc20_contract_to_spot_token, SpotId};
@@ -139,10 +138,10 @@ impl SealedBlock {
             sidecars: None,
             read_precompile_calls: Some(read_precompile_calls),
         };
-        let reth_block = HlBlock {
+        
+        HlBlock {
             header: self.header.header.clone(),
             body: block_body,
-        };
-        reth_block.into()
+        }
     }
 }
