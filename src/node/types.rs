@@ -36,13 +36,15 @@ impl From<ReadPrecompileMap> for ReadPrecompileCalls {
 
 impl Encodable for ReadPrecompileCalls {
     fn encode(&self, out: &mut dyn BufMut) {
-        rmp_serde::encode::write(&mut out.writer(), &self.0).unwrap();
+        let buf: Bytes = rmp_serde::to_vec(&self.0).unwrap().into();
+        buf.encode(out);
     }
 }
 
 impl Decodable for ReadPrecompileCalls {
     fn decode(buf: &mut &[u8]) -> alloy_rlp::Result<Self> {
-        let calls = rmp_serde::decode::from_slice(buf)
+        let bytes = Bytes::decode(buf)?;
+        let calls = rmp_serde::decode::from_slice(&bytes)
             .map_err(|_| alloy_rlp::Error::Custom("Failed to decode ReadPrecompileCalls"))?;
         Ok(Self(calls))
     }
