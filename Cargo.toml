@@ -45,6 +45,8 @@ reth-rpc-engine-api = { path = "../reth/crates/rpc/rpc-engine-api" }
 reth-tracing = { path = "../reth/crates/tracing" }
 reth-trie-common = { path = "../reth/crates/trie/common", default-features = false }
 reth-trie-db = { path = "../reth/crates/trie/db" }
+reth-codecs = { path = "../reth/crates/storage/codecs" }
+reth-transaction-pool = { path = "../reth/crates/transaction-pool" }
 revm = { version = "24.0.1" }
 
 # alloy dependencies

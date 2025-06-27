@@ -1,15 +1,17 @@
 //! Copy of reth codebase to preserve serialization compatibility
 use alloy_consensus::{Header, Signed, TxEip1559, TxEip2930, TxEip4844, TxEip7702, TxLegacy};
 use alloy_primitives::{Address, BlockHash, Signature, TxKind, U256};
+use reth_primitives::TransactionSigned as RethTxSigned;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::BTreeMap,
-    sync::{Arc, LazyLock, Mutex},
+    sync::{Arc, LazyLock, RwLock},
 };
 use tracing::info;
 
 use crate::{
     node::{
+        primitives::TransactionSigned as TxSigned,
         spot_meta::{erc20_contract_to_spot_token, SpotId},
         types::{ReadPrecompileCalls, SystemTx},
     },
@@ -42,23 +44,23 @@ pub struct TransactionSigned {
     transaction: Transaction,
 }
 impl TransactionSigned {
-    fn to_reth_transaction(&self) -> reth_primitives::TransactionSigned {
+    fn to_reth_transaction(&self) -> TxSigned {
         match self.transaction.clone() {
             Transaction::Legacy(tx) => {
-                reth_primitives::TransactionSigned::Legacy(Signed::new_unhashed(tx, self.signature))
+                TxSigned(RethTxSigned::Legacy(Signed::new_unhashed(tx, self.signature)))
             }
-            Transaction::Eip2930(tx) => reth_primitives::TransactionSigned::Eip2930(
-                Signed::new_unhashed(tx, self.signature),
-            ),
-            Transaction::Eip1559(tx) => reth_primitives::TransactionSigned::Eip1559(
-                Signed::new_unhashed(tx, self.signature),
-            ),
-            Transaction::Eip4844(tx) => reth_primitives::TransactionSigned::Eip4844(
-                Signed::new_unhashed(tx, self.signature),
-            ),
-            Transaction::Eip7702(tx) => reth_primitives::TransactionSigned::Eip7702(
-                Signed::new_unhashed(tx, self.signature),
-            ),
+            Transaction::Eip2930(tx) => {
+                TxSigned(RethTxSigned::Eip2930(Signed::new_unhashed(tx, self.signature)))
+            }
+            Transaction::Eip1559(tx) => {
+                TxSigned(RethTxSigned::Eip1559(Signed::new_unhashed(tx, self.signature)))
+            }
+            Transaction::Eip4844(tx) => {
+                TxSigned(RethTxSigned::Eip4844(Signed::new_unhashed(tx, self.signature)))
+            }
+            Transaction::Eip7702(tx) => {
+                TxSigned(RethTxSigned::Eip7702(Signed::new_unhashed(tx, self.signature)))
+            }
         }
     }
 }
@@ -67,24 +69,21 @@ type BlockBody = alloy_consensus::BlockBody<TransactionSigned, Header>;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SealedHeader {
-    hash: BlockHash,
-    header: Header,
+    pub hash: BlockHash,
+    pub header: Header,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SealedBlock {
     /// Sealed Header.
-    header: SealedHeader,
+    pub header: SealedHeader,
     /// the block's body.
-    body: BlockBody,
+    pub body: BlockBody,
 }
 
-fn system_tx_to_reth_transaction(
-    transaction: &SystemTx,
-    chain_id: u64,
-) -> reth_primitives::TransactionSigned {
-    static EVM_MAP: LazyLock<Arc<Mutex<BTreeMap<Address, SpotId>>>> =
-        LazyLock::new(|| Arc::new(Mutex::new(BTreeMap::new())));
+fn system_tx_to_reth_transaction(transaction: &SystemTx, chain_id: u64) -> TxSigned {
+    static EVM_MAP: LazyLock<Arc<RwLock<BTreeMap<Address, SpotId>>>> =
+        LazyLock::new(|| Arc::new(RwLock::new(BTreeMap::new())));
     {
         let Transaction::Legacy(tx) = &transaction.tx else {
             panic!("Unexpected transaction type");
@@ -96,16 +95,16 @@ fn system_tx_to_reth_transaction(
             U256::from(0x1)
         } else {
             loop {
-                if let Some(spot) = EVM_MAP.lock().unwrap().get(&to) {
+                if let Some(spot) = EVM_MAP.read().unwrap().get(&to) {
                     break spot.to_s();
                 }
 
                 info!("Contract not found: {:?} from spot mapping, fetching again...", to);
-                *EVM_MAP.lock().unwrap() = erc20_contract_to_spot_token(chain_id).unwrap();
+                *EVM_MAP.write().unwrap() = erc20_contract_to_spot_token(chain_id).unwrap();
             }
         };
         let signature = Signature::new(U256::from(0x1), s, true);
-        reth_primitives::TransactionSigned::Legacy(Signed::new_unhashed(tx.clone(), signature))
+        TxSigned(RethTxSigned::Legacy(Signed::new_unhashed(tx.clone(), signature)))
     }
 }
 

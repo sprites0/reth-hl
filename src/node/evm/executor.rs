@@ -2,7 +2,10 @@ use super::{config::HlBlockExecutionCtx, patch::patch_mainnet_after_tx};
 use crate::{
     evm::transaction::HlTxEnv,
     hardforks::HlHardforks,
-    node::types::{ReadPrecompileInput, ReadPrecompileResult},
+    node::{
+        primitives::TransactionSigned,
+        types::{ReadPrecompileInput, ReadPrecompileResult},
+    },
 };
 use alloy_consensus::{Transaction, TxReceipt};
 use alloy_eips::{eip7685::Requests, Encodable2718};
@@ -16,7 +19,6 @@ use reth_evm::{
     precompiles::{DynPrecompile, PrecompilesMap},
     Database, Evm, FromRecoveredTx, FromTxWithEncoded, IntoTxEnv, OnStateHook, RecoveredTx,
 };
-use reth_primitives::TransactionSigned;
 use reth_provider::BlockExecutionResult;
 use reth_revm::State;
 use revm::{
@@ -98,23 +100,7 @@ where
 {
     /// Creates a new HlBlockExecutor.
     pub fn new(mut evm: EVM, ctx: HlBlockExecutionCtx<'a>, spec: Spec, receipt_builder: R) -> Self {
-        let precompiles_mut = evm.precompiles_mut();
-        // For all precompile addresses just in case it's populated and not cleared
-        // Clear 0x00...08xx addresses
-        let addresses = precompiles_mut.addresses().cloned().collect::<Vec<_>>();
-        for address in addresses {
-            if address.starts_with(&[0u8; 18]) && address[19] == 8 {
-                precompiles_mut.apply_precompile(&address, |_| None);
-            }
-        }
-        for (address, precompile) in ctx.read_precompile_calls.iter() {
-            let precompile = precompile.clone();
-            precompiles_mut.apply_precompile(address, |_| {
-                Some(DynPrecompile::from(move |data: &[u8], gas: u64| {
-                    run_precompile(&precompile, data, gas)
-                }))
-            });
-        }
+        apply_precompiles(&mut evm, &ctx);
         Self { spec, evm, gas_used: 0, receipts: vec![], receipt_builder, ctx }
     }
 }
@@ -127,6 +113,7 @@ where
         Tx: FromRecoveredTx<R::Transaction>
                 + FromRecoveredTx<TransactionSigned>
                 + FromTxWithEncoded<TransactionSigned>,
+        Precompiles = PrecompilesMap,
     >,
     Spec: EthereumHardforks + HlHardforks + EthChainSpec + Hardforks,
     R: ReceiptBuilder<Transaction = TransactionSigned, Receipt: TxReceipt>,
@@ -140,6 +127,7 @@ where
     type Evm = E;
 
     fn apply_pre_execution_changes(&mut self) -> Result<(), BlockExecutionError> {
+        apply_precompiles(&mut self.evm, &self.ctx);
         Ok(())
     }
 
@@ -221,5 +209,29 @@ where
 
     fn evm(&self) -> &Self::Evm {
         &self.evm
+    }
+}
+
+fn apply_precompiles<'a, DB, EVM>(evm: &mut EVM, ctx: &HlBlockExecutionCtx<'a>)
+where
+    EVM: Evm<DB = &'a mut State<DB>, Precompiles = PrecompilesMap>,
+    DB: Database + 'a,
+{
+    let precompiles_mut = evm.precompiles_mut();
+    // For all precompile addresses just in case it's populated and not cleared
+    // Clear 0x00...08xx addresses
+    let addresses = precompiles_mut.addresses().cloned().collect::<Vec<_>>();
+    for address in addresses {
+        if address.starts_with(&[0u8; 18]) && address[19] == 8 {
+            precompiles_mut.apply_precompile(&address, |_| None);
+        }
+    }
+    for (address, precompile) in ctx.read_precompile_calls.iter() {
+        let precompile = precompile.clone();
+        precompiles_mut.apply_precompile(address, |_| {
+            Some(DynPrecompile::from(move |data: &[u8], gas: u64| {
+                run_precompile(&precompile, data, gas)
+            }))
+        });
     }
 }

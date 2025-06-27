@@ -64,7 +64,6 @@ where
     to_network: UnboundedSender<ImportEvent>,
     /// Pending block imports.
     pending_imports: FuturesUnordered<ImportFut>,
-    height: u64,
 }
 
 impl<Provider> ImportService<Provider>
@@ -77,7 +76,6 @@ where
         engine: BeaconConsensusEngineHandle<HlPayloadTypes>,
         from_network: UnboundedReceiver<IncomingBlock>,
         to_network: UnboundedSender<ImportEvent>,
-        height: u64,
     ) -> Self {
         Self {
             engine,
@@ -85,7 +83,6 @@ where
             from_network,
             to_network,
             pending_imports: FuturesUnordered::new(),
-            height,
         }
     }
 
@@ -172,23 +169,10 @@ where
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let this = self.get_mut();
-        let prev_height = this.height;
 
         // Receive new blocks from network
-        while let Some(block) = collect_block(this.height) {
-            if this.height > prev_height + 1000 {
-                break;
-            }
-
-            let peer_id = PeerId::random();
-            let reth_block = block.to_reth_block();
-            let td = U128::from(reth_block.header().difficulty());
-            let msg = NewBlockMessage {
-                hash: reth_block.header().hash_slow(),
-                block: Arc::new(HlNewBlock(NewBlock { block: reth_block, td })),
-            };
-            this.on_new_block(msg, peer_id);
-            this.height += 1;
+        while let Poll::Ready(Some((block, peer_id))) = this.from_network.poll_recv(cx) {
+            this.on_new_block(block, peer_id);
         }
 
         // Process completed imports and send events to network
@@ -366,7 +350,7 @@ mod tests {
 
             let handle = ImportHandle::new(to_import, import_outcome);
 
-            let service = ImportService::new(consensus, engine_handle, from_network, to_network, 1);
+            let service = ImportService::new(consensus, engine_handle, from_network, to_network);
             tokio::spawn(Box::pin(async move {
                 service.await.unwrap();
             }));

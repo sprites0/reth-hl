@@ -1,9 +1,9 @@
-use alloy_consensus::Transaction as AlloyTransaction;
-use alloy_primitives::address;
+use crate::node::primitives::TransactionSigned;
+use alloy_consensus::Transaction as _;
 use alloy_rpc_types::AccessList;
 use auto_impl::auto_impl;
 use reth_evm::{FromRecoveredTx, FromTxWithEncoded, IntoTxEnv, TransactionEnv};
-use reth_primitives::TransactionSigned;
+use reth_primitives_traits::SignerRecoverable;
 use revm::{
     context::TxEnv,
     context_interface::transaction::Transaction,
@@ -118,21 +118,10 @@ impl<T: revm::context::Transaction> IntoTxEnv<Self> for HlTxEnv<T> {
     }
 }
 
-fn s_to_address(s: U256) -> Address {
-    if s == U256::ONE {
-        return address!("2222222222222222222222222222222222222222");
-    }
-    let mut buf = [0u8; 20];
-    buf.copy_from_slice(&s.to_be_bytes::<32>()[12..]);
-    Address::from_slice(&buf)
-}
-
 impl FromRecoveredTx<TransactionSigned> for HlTxEnv<TxEnv> {
     fn from_recovered_tx(tx: &TransactionSigned, sender: Address) -> Self {
-        if let Some(gas_price) = tx.gas_price() {
-            if gas_price == 0 {
-                return Self::new(TxEnv::from_recovered_tx(tx, s_to_address(tx.signature().s())));
-            }
+        if tx.gas_price().is_some() && tx.gas_price().unwrap() == 0 {
+            return Self::new(TxEnv::from_recovered_tx(tx, tx.recover_signer().unwrap()));
         }
 
         Self::new(TxEnv::from_recovered_tx(tx, sender))
@@ -141,7 +130,7 @@ impl FromRecoveredTx<TransactionSigned> for HlTxEnv<TxEnv> {
 
 impl FromTxWithEncoded<TransactionSigned> for HlTxEnv<TxEnv> {
     fn from_encoded_tx(tx: &TransactionSigned, sender: Address, _encoded: Bytes) -> Self {
-        let base = match tx.clone().into_typed_transaction() {
+        let base = match tx.clone().0.into_typed_transaction() {
             reth_primitives::Transaction::Legacy(tx) => TxEnv::from_recovered_tx(&tx, sender),
             reth_primitives::Transaction::Eip2930(tx) => TxEnv::from_recovered_tx(&tx, sender),
             reth_primitives::Transaction::Eip1559(tx) => TxEnv::from_recovered_tx(&tx, sender),

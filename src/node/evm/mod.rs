@@ -29,6 +29,7 @@ pub mod config;
 mod executor;
 mod factory;
 mod patch;
+pub mod receipt_builder;
 
 /// HL EVM implementation.
 ///

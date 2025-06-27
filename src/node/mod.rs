@@ -1,7 +1,8 @@
 use crate::{
     chainspec::HlChainSpec,
     node::{
-        primitives::{HlBlock, HlBlockBody, HlPrimitives},
+        pool::HlPoolBuilder,
+        primitives::{BlockBody, HlBlock, HlBlockBody, HlPrimitives, TransactionSigned},
         rpc::{
             engine_api::{
                 builder::HlEngineApiBuilder, payload::HlPayloadTypes,
@@ -24,8 +25,6 @@ use reth::{
     },
 };
 use reth_engine_primitives::BeaconConsensusEngineHandle;
-use reth_node_ethereum::node::EthereumPoolBuilder;
-use reth_primitives::BlockBody;
 use reth_trie_db::MerklePatriciaTrie;
 use std::sync::Arc;
 use tokio::sync::{oneshot, Mutex};
@@ -59,12 +58,14 @@ impl HlNode {
     }
 }
 
+mod pool;
+
 impl HlNode {
     pub fn components<Node>(
         &self,
     ) -> ComponentsBuilder<
         Node,
-        EthereumPoolBuilder,
+        HlPoolBuilder,
         HlPayloadServiceBuilder,
         HlNetworkBuilder,
         HlExecutorBuilder,
@@ -75,7 +76,7 @@ impl HlNode {
     {
         ComponentsBuilder::default()
             .node_types::<Node>()
-            .pool(EthereumPoolBuilder::default())
+            .pool(HlPoolBuilder)
             .executor(HlExecutorBuilder::default())
             .payload(HlPayloadServiceBuilder::default())
             .network(HlNetworkBuilder { engine_handle_rx: self.engine_handle_rx.clone() })
@@ -97,7 +98,7 @@ where
 {
     type ComponentsBuilder = ComponentsBuilder<
         N,
-        EthereumPoolBuilder,
+        HlPoolBuilder,
         HlPayloadServiceBuilder,
         HlNetworkBuilder,
         HlExecutorBuilder,
@@ -131,7 +132,7 @@ where
                 inner: BlockBody {
                     transactions: transactions
                         .into_transactions()
-                        .map(|tx| tx.inner.into_inner().into())
+                        .map(|tx| TransactionSigned(tx.inner.into_inner().into()))
                         .collect(),
                     ommers: Default::default(),
                     withdrawals,

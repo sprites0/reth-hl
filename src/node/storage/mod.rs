@@ -1,4 +1,10 @@
-use crate::{node::types::ReadPrecompileCalls, HlBlock, HlBlockBody, HlPrimitives};
+use crate::{
+    node::{
+        primitives::tx_wrapper::{convert_to_eth_block_body, convert_to_hl_block_body},
+        types::ReadPrecompileCalls,
+    },
+    HlBlock, HlBlockBody, HlPrimitives,
+};
 use alloy_consensus::BlockHeader;
 use alloy_primitives::Bytes;
 use reth_chainspec::EthereumHardforks;
@@ -87,7 +93,7 @@ where
         for (block_number, body) in bodies {
             match body {
                 Some(HlBlockBody { inner, sidecars: _, read_precompile_calls: rpc }) => {
-                    eth_bodies.push((block_number, Some(inner)));
+                    eth_bodies.push((block_number, Some(convert_to_eth_block_body(inner))));
                     read_precompile_calls.push((block_number, rpc));
                 }
                 None => {
@@ -128,14 +134,22 @@ where
         inputs: Vec<ReadBodyInput<'_, Self::Block>>,
     ) -> ProviderResult<Vec<HlBlockBody>> {
         let read_precompile_calls = self.read_precompile_calls(provider, &inputs)?;
-        let eth_bodies = self.0.read_block_bodies(provider, inputs)?;
+        let eth_bodies = self.0.read_block_bodies(
+            provider,
+            inputs
+                .into_iter()
+                .map(|(header, transactions)| {
+                    (header, transactions.into_iter().map(|tx| tx.0).collect())
+                })
+                .collect(),
+        )?;
 
         // NOTE: sidecars are not used in HyperEVM yet.
         Ok(eth_bodies
             .into_iter()
             .zip(read_precompile_calls)
             .map(|(inner, read_precompile_calls)| HlBlockBody {
-                inner,
+                inner: convert_to_hl_block_body(inner),
                 sidecars: None,
                 read_precompile_calls,
             })

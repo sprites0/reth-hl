@@ -1,13 +1,16 @@
 #![allow(clippy::owned_cow)]
 use alloy_consensus::{BlobTransactionSidecar, Header};
 use alloy_rlp::{Encodable, RlpDecodable, RlpEncodable};
-use reth_ethereum_primitives::{BlockBody, Receipt};
-use reth_primitives::{NodePrimitives, TransactionSigned};
+use reth_ethereum_primitives::Receipt;
+use reth_primitives::NodePrimitives;
 use reth_primitives_traits::{Block, BlockBody as BlockBodyTrait, InMemorySize};
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 
 use crate::node::types::{ReadPrecompileCall, ReadPrecompileCalls};
+
+pub mod tx_wrapper;
+pub use tx_wrapper::{BlockBody, TransactionSigned};
 
 /// Primitive types for HyperEVM.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -46,11 +49,13 @@ pub struct HlBlockBody {
 
 impl InMemorySize for HlBlockBody {
     fn size(&self) -> usize {
-        self.inner.size() +
-            self.sidecars
+        self.inner.size()
+            + self
+                .sidecars
                 .as_ref()
-                .map_or(0, |s| s.capacity() * core::mem::size_of::<BlobTransactionSidecar>()) +
-            self.read_precompile_calls
+                .map_or(0, |s| s.capacity() * core::mem::size_of::<BlobTransactionSidecar>())
+            + self
+                .read_precompile_calls
                 .as_ref()
                 .map_or(0, |s| s.0.capacity() * core::mem::size_of::<ReadPrecompileCall>())
     }
@@ -78,6 +83,16 @@ impl BlockBodyTrait for HlBlockBody {
 
     fn ommers(&self) -> Option<&[Self::OmmerHeader]> {
         self.inner.ommers()
+    }
+
+    fn calculate_tx_root(&self) -> alloy_primitives::B256 {
+        alloy_consensus::proofs::calculate_transaction_root(
+            &self
+                .transactions()
+                .iter()
+                .filter(|tx| !tx.is_system_transaction())
+                .collect::<Vec<_>>(),
+        )
     }
 }
 

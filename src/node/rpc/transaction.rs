@@ -1,10 +1,16 @@
 use super::HlNodeCore;
-use crate::{node::rpc::HlEthApi, HlPrimitives};
+use crate::{
+    node::{
+        primitives::{tx_wrapper::convert_recovered, TransactionSigned},
+        rpc::HlEthApi,
+    },
+    HlPrimitives,
+};
 use alloy_network::{Ethereum, Network};
 use alloy_primitives::{Bytes, Signature, B256};
 use reth::{
     builder::FullNodeComponents,
-    primitives::{Receipt, Recovered, TransactionSigned},
+    primitives::{Receipt, Recovered},
     providers::ReceiptProvider,
     rpc::{
         eth::helpers::types::EthRpcConverter,
@@ -18,6 +24,7 @@ use reth_rpc_eth_api::{
     helpers::{EthSigner, EthTransactions, LoadTransaction, SpawnBlocking},
     FromEthApiError, FullEthApiTypes, RpcNodeCore, RpcNodeCoreExt, TransactionCompat,
 };
+
 impl<N> LoadTransaction for HlEthApi<N>
 where
     Self: SpawnBlocking + FullEthApiTypes + RpcNodeCoreExt,
@@ -41,7 +48,7 @@ where
         tx_info: TransactionInfo,
     ) -> Result<Self::Transaction, Self::Error> {
         let builder = EthRpcConverter::default();
-        builder.fill(tx, tx_info)
+        builder.fill(convert_recovered(tx), tx_info)
     }
 
     fn build_simulate_v1_transaction(
@@ -54,7 +61,10 @@ where
 
         // Create an empty signature for the transaction.
         let signature = Signature::new(Default::default(), Default::default(), false);
-        Ok(TransactionSigned::new_unhashed(tx.into(), signature))
+        Ok(TransactionSigned(reth_primitives::TransactionSigned::new_unhashed(
+            tx.into(),
+            signature,
+        )))
     }
 }
 

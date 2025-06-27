@@ -1,6 +1,4 @@
 use crate::{hardforks::HlHardforks, node::HlNode, HlBlock, HlBlockBody, HlPrimitives};
-use alloy_consensus::BlockHeader as _;
-use alloy_eips::eip7685::Requests;
 use reth::{
     api::FullNodeTypes,
     beacon_consensus::EthBeaconConsensus,
@@ -10,11 +8,9 @@ use reth::{
         validate_against_parent_4844, validate_against_parent_hash_number,
     },
 };
-use reth_chainspec::{EthChainSpec, EthereumHardforks};
-use reth_primitives::{
-    gas_spent_by_transactions, GotExpected, Receipt, RecoveredBlock, SealedBlock, SealedHeader,
-};
-use reth_primitives_traits::{Block, BlockHeader, Receipt as ReceiptTrait};
+use reth_chainspec::EthChainSpec;
+use reth_primitives::{Receipt, RecoveredBlock, SealedBlock, SealedHeader};
+use reth_primitives_traits::BlockHeader;
 use reth_provider::BlockExecutionResult;
 use std::sync::Arc;
 
@@ -67,11 +63,8 @@ pub fn validate_against_parent_timestamp<H: BlockHeader>(
 }
 
 impl<ChainSpec: EthChainSpec + HlHardforks> HeaderValidator for HlConsensus<ChainSpec> {
-    fn validate_header(&self, _header: &SealedHeader) -> Result<(), ConsensusError> {
-        // TODO: doesn't work because of extradata check
-        // self.inner.validate_header(header)
-
-        Ok(())
+    fn validate_header(&self, header: &SealedHeader) -> Result<(), ConsensusError> {
+        self.inner.validate_header(header)
     }
 
     fn validate_header_against_parent(
@@ -142,71 +135,17 @@ impl<ChainSpec: EthChainSpec + HlHardforks> Consensus<HlBlock> for HlConsensus<C
 
 mod reth_copy;
 
-pub fn validate_block_post_execution<B, R, ChainSpec>(
-    block: &RecoveredBlock<B>,
-    chain_spec: &ChainSpec,
-    receipts: &[R],
-    requests: &Requests,
-) -> Result<(), ConsensusError>
-where
-    B: Block,
-    R: ReceiptTrait,
-    ChainSpec: EthereumHardforks,
-{
-    use reth_copy::verify_receipts;
-    // Copy of reth's validate_block_post_execution
-    // Differences:
-    // - Filter out system transactions for receipts check
-
-    // Check if gas used matches the value set in header.
-    let cumulative_gas_used =
-        receipts.last().map(|receipt| receipt.cumulative_gas_used()).unwrap_or(0);
-    if block.header().gas_used() != cumulative_gas_used {
-        return Err(ConsensusError::BlockGasUsed {
-            gas: GotExpected { got: cumulative_gas_used, expected: block.header().gas_used() },
-            gas_spent_by_tx: gas_spent_by_transactions(receipts),
-        });
-    }
-
-    // Before Byzantium, receipts contained state root that would mean that expensive
-    // operation as hashing that is required for state root got calculated in every
-    // transaction This was replaced with is_success flag.
-    // See more about EIP here: https://eips.ethereum.org/EIPS/eip-658
-    if chain_spec.is_byzantium_active_at_block(block.header().number()) {
-        let receipts_for_root =
-            receipts.iter().filter(|&r| r.cumulative_gas_used() != 0).cloned().collect::<Vec<_>>();
-        if let Err(error) = verify_receipts(
-            block.header().receipts_root(),
-            block.header().logs_bloom(),
-            &receipts_for_root,
-        ) {
-            tracing::debug!(%error, ?receipts, "receipts verification failed");
-            return Err(error);
-        }
-    }
-
-    // Validate that the header requests hash matches the calculated requests hash
-    if chain_spec.is_prague_active_at_timestamp(block.header().timestamp()) {
-        let Some(header_requests_hash) = block.header().requests_hash() else {
-            return Err(ConsensusError::RequestsHashMissing);
-        };
-        let requests_hash = requests.requests_hash();
-        if requests_hash != header_requests_hash {
-            return Err(ConsensusError::BodyRequestsHashDiff(
-                GotExpected::new(requests_hash, header_requests_hash).into(),
-            ));
-        }
-    }
-
-    Ok(())
-}
-
 impl<ChainSpec: EthChainSpec + HlHardforks> FullConsensus<HlPrimitives> for HlConsensus<ChainSpec> {
     fn validate_block_post_execution(
         &self,
         block: &RecoveredBlock<HlBlock>,
         result: &BlockExecutionResult<Receipt>,
     ) -> Result<(), ConsensusError> {
-        validate_block_post_execution(block, &self.chain_spec, &result.receipts, &result.requests)
+        reth_copy::validate_block_post_execution(
+            block,
+            &self.chain_spec,
+            &result.receipts,
+            &result.requests,
+        )
     }
 }

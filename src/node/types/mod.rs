@@ -2,7 +2,7 @@
 //!
 //! Changes:
 //! - ReadPrecompileCalls supports RLP encoding / decoding
-use alloy_primitives::{Address, Bytes, Log};
+use alloy_primitives::{Address, Bytes, Log, B256};
 use alloy_rlp::{Decodable, Encodable, RlpDecodable, RlpEncodable};
 use bytes::BufMut;
 use revm::primitives::HashMap;
@@ -68,6 +68,16 @@ impl BlockAndReceipts {
             self.system_txs.clone(),
             MAINNET_CHAIN_ID,
         )
+    }
+
+    pub fn hash(&self) -> B256 {
+        let EvmBlock::Reth115(block) = &self.block;
+        block.header.hash
+    }
+
+    pub fn number(&self) -> u64 {
+        let EvmBlock::Reth115(block) = &self.block;
+        block.header.header.number
     }
 }
 

@@ -11,7 +11,6 @@ use crate::{
     HlBlock,
 };
 use alloy_rlp::{Decodable, Encodable};
-use reth_provider::BlockNumReader;
 // use handshake::HlHandshake;
 use reth::{
     api::{FullNodeTypes, TxTy},
@@ -37,12 +36,14 @@ pub struct HlNewBlock(pub NewBlock<HlBlock>);
 
 mod rlp {
     use super::*;
-    use crate::HlBlockBody;
-    use alloy_consensus::{BlobTransactionSidecar, BlockBody, Header};
+    use crate::{
+        node::primitives::{BlockBody, TransactionSigned},
+        HlBlockBody,
+    };
+    use alloy_consensus::{BlobTransactionSidecar, Header};
     use alloy_primitives::U128;
     use alloy_rlp::{RlpDecodable, RlpEncodable};
     use alloy_rpc_types::Withdrawals;
-    use reth_primitives::TransactionSigned;
     use std::borrow::Cow;
 
     #[derive(RlpEncodable, RlpDecodable)]
@@ -170,8 +171,6 @@ impl HlNetworkBuilder {
 
         let handle = ImportHandle::new(to_import, import_outcome);
         let consensus = Arc::new(HlConsensus { provider: ctx.provider().clone() });
-        let number = ctx.provider().last_block_number().unwrap_or(1);
-        let number = std::cmp::max(number, 1);
 
         ctx.task_executor().spawn_critical("block import", async move {
             let handle = engine_handle_rx
@@ -182,12 +181,13 @@ impl HlNetworkBuilder {
                 .await
                 .unwrap();
 
-            ImportService::new(consensus, handle, from_network, to_network, number).await.unwrap();
+            ImportService::new(consensus, handle, from_network, to_network).await.unwrap();
         });
 
         let network_builder = network_builder
             .boot_nodes(boot_nodes())
             .set_head(ctx.head())
+            .with_pow()
             .block_import(Box::new(HlBlockImport::new(handle)));
         // .discovery(discv4)
         // .eth_rlpx_handshake(Arc::new(HlHandshake::default()));

@@ -1,6 +1,7 @@
 use crate::{
     chainspec::HlChainSpec,
     node::{
+        primitives::TransactionSigned,
         rpc::{HlEthApi, HlNodeCore},
         HlBlock, HlPrimitives,
     },
@@ -10,7 +11,7 @@ use alloy_primitives::B256;
 use reth::{
     api::NodeTypes,
     builder::FullNodeComponents,
-    primitives::{Receipt, SealedHeader, TransactionMeta, TransactionSigned},
+    primitives::{Receipt, SealedHeader, TransactionMeta},
     providers::{BlockReaderIdExt, ProviderHeader, ReceiptProvider, TransactionsProvider},
     rpc::{
         eth::EthApiTypes,
@@ -64,7 +65,7 @@ where
                 .enumerate()
                 .map(|(idx, (tx, receipt))| {
                     let meta = TransactionMeta {
-                        tx_hash: *tx.tx_hash(),
+                        tx_hash: *tx.0.tx_hash(),
                         index: idx as u64,
                         block_hash,
                         block_number,
@@ -72,7 +73,7 @@ where
                         excess_blob_gas,
                         timestamp,
                     };
-                    EthReceiptBuilder::new(tx, meta, receipt, &receipts, blob_params)
+                    EthReceiptBuilder::new(&tx.0, meta, receipt, &receipts, blob_params)
                         .map(|builder| builder.build())
                 })
                 .collect::<Result<Vec<_>, Self::Error>>()
@@ -164,6 +165,6 @@ where
             .ok_or(EthApiError::HeaderNotFound(hash.into()))?;
         let blob_params = self.provider().chain_spec().blob_params_at_timestamp(meta.timestamp);
 
-        Ok(EthReceiptBuilder::new(&tx, meta, &receipt, &all_receipts, blob_params)?.build())
+        Ok(EthReceiptBuilder::new(&tx.0, meta, &receipt, &all_receipts, blob_params)?.build())
     }
 }
