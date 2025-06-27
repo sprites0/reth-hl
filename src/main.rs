@@ -1,19 +1,14 @@
-use clap::{Args, Parser};
+use clap::Parser;
 use reth::builder::NodeHandle;
 use reth_hl::{
     chainspec::parser::HlChainSpecParser,
-    node::{cli::Cli, storage::tables::Tables, HlNode},
+    node::{cli::{Cli, HlNodeArgs}, storage::tables::Tables, HlNode},
 };
 
 // We use jemalloc for performance reasons
 #[cfg(all(feature = "jemalloc", unix))]
 #[global_allocator]
 static ALLOC: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
-
-/// No Additional arguments
-#[derive(Debug, Clone, Copy, Default, Args)]
-#[non_exhaustive]
-struct NoArgs;
 
 fn main() -> eyre::Result<()> {
     reth_cli_util::sigsegv_handler::install();
@@ -23,9 +18,9 @@ fn main() -> eyre::Result<()> {
         std::env::set_var("RUST_BACKTRACE", "1");
     }
 
-    Cli::<HlChainSpecParser, NoArgs>::parse().run(|builder, _| async move {
+    Cli::<HlChainSpecParser, HlNodeArgs>::parse().run(|builder, ext| async move {
         builder.builder.database.create_tables_for::<Tables>()?;
-        let (node, engine_handle_tx) = HlNode::new();
+        let (node, engine_handle_tx) = HlNode::new(ext.block_source_args.parse().await?);
         let NodeHandle { node, node_exit_future: exit_future } =
             builder.node(node).launch().await?;
 

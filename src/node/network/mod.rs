@@ -8,6 +8,7 @@ use crate::{
         types::ReadPrecompileCalls,
         HlNode,
     },
+    pseudo_peer::{start_pseudo_peer, BlockSourceConfig},
     HlBlock,
 };
 use alloy_rlp::{Decodable, Encodable};
@@ -149,6 +150,8 @@ pub type HlNetworkPrimitives =
 pub struct HlNetworkBuilder {
     pub(crate) engine_handle_rx:
         Arc<Mutex<Option<oneshot::Receiver<BeaconConsensusEngineHandle<HlPayloadTypes>>>>>,
+
+    pub(crate) block_source_config: BlockSourceConfig,
 }
 
 impl HlNetworkBuilder {
@@ -162,7 +165,7 @@ impl HlNetworkBuilder {
     where
         Node: FullNodeTypes<Types = HlNode>,
     {
-        let Self { engine_handle_rx } = self;
+        let Self { engine_handle_rx, .. } = self;
 
         let network_builder = ctx.network_config_builder()?;
 
@@ -185,6 +188,8 @@ impl HlNetworkBuilder {
         });
 
         let network_builder = network_builder
+            .disable_dns_discovery()
+            .disable_nat()
             .boot_nodes(boot_nodes())
             .set_head(ctx.head())
             .with_pow()
@@ -216,10 +221,17 @@ where
         ctx: &BuilderContext<Node>,
         pool: Pool,
     ) -> eyre::Result<Self::Network> {
+        let block_source_config = self.block_source_config.clone();
         let network_config = self.network_config(ctx)?;
         let network = NetworkManager::builder(network_config).await?;
         let handle = ctx.start_network(network, pool);
-        info!(target: "reth::cli", enode=%handle.local_node_record(), "P2P networking initialized");
+        let local_node_record = handle.local_node_record();
+        info!(target: "reth::cli", enode=%local_node_record, "P2P networking initialized");
+
+        ctx.task_executor().spawn_critical("pseudo peer", async move {
+            let block_source = block_source_config.create_cached_block_source().await;
+            start_pseudo_peer(local_node_record.to_string(), block_source).await.unwrap();
+        });
 
         Ok(handle)
     }

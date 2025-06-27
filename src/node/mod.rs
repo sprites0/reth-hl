@@ -12,6 +12,7 @@ use crate::{
         },
         storage::HlStorage,
     },
+    pseudo_peer::BlockSourceConfig,
 };
 use consensus::HlConsensusBuilder;
 use engine::HlPayloadServiceBuilder;
@@ -49,12 +50,15 @@ pub type HlNodeAddOns<N> =
 pub struct HlNode {
     engine_handle_rx:
         Arc<Mutex<Option<oneshot::Receiver<BeaconConsensusEngineHandle<HlPayloadTypes>>>>>,
+    block_source_config: BlockSourceConfig,
 }
 
 impl HlNode {
-    pub fn new() -> (Self, oneshot::Sender<BeaconConsensusEngineHandle<HlPayloadTypes>>) {
+    pub fn new(
+        block_source_config: BlockSourceConfig,
+    ) -> (Self, oneshot::Sender<BeaconConsensusEngineHandle<HlPayloadTypes>>) {
         let (tx, rx) = oneshot::channel();
-        (Self { engine_handle_rx: Arc::new(Mutex::new(Some(rx))) }, tx)
+        (Self { engine_handle_rx: Arc::new(Mutex::new(Some(rx))), block_source_config }, tx)
     }
 }
 
@@ -79,7 +83,10 @@ impl HlNode {
             .pool(HlPoolBuilder)
             .executor(HlExecutorBuilder::default())
             .payload(HlPayloadServiceBuilder::default())
-            .network(HlNetworkBuilder { engine_handle_rx: self.engine_handle_rx.clone() })
+            .network(HlNetworkBuilder {
+                engine_handle_rx: self.engine_handle_rx.clone(),
+                block_source_config: self.block_source_config.clone(),
+            })
             .consensus(HlConsensusBuilder::default())
     }
 }

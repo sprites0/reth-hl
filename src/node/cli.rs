@@ -3,8 +3,9 @@ use crate::{
     node::{
         consensus::HlConsensus, evm::config::HlEvmConfig, network::HlNetworkPrimitives, HlNode,
     },
+    pseudo_peer::BlockSourceArgs,
 };
-use clap::Parser;
+use clap::{Args, Parser};
 use reth::{
     args::LogArgs,
     builder::{NodeBuilder, WithLaunchContext},
@@ -15,7 +16,7 @@ use reth::{
 };
 use reth_chainspec::EthChainSpec;
 use reth_cli::chainspec::ChainSpecParser;
-use reth_cli_commands::{launcher::FnLauncher, node::NoArgs};
+use reth_cli_commands::launcher::FnLauncher;
 use reth_db::DatabaseEnv;
 use reth_tracing::FileWorkerGuard;
 use std::{
@@ -25,12 +26,20 @@ use std::{
 };
 use tracing::info;
 
+#[derive(Debug, Clone, Args)]
+#[non_exhaustive]
+pub struct HlNodeArgs {
+    #[command(flatten)]
+    pub block_source_args: BlockSourceArgs,
+}
+
 /// The main reth_hl cli interface.
 ///
 /// This is the entrypoint to the executable.
 #[derive(Debug, Parser)]
 #[command(author, version = SHORT_VERSION, long_version = LONG_VERSION, about = "Reth", long_about = None)]
-pub struct Cli<Spec: ChainSpecParser = HlChainSpecParser, Ext: clap::Args + fmt::Debug = NoArgs> {
+pub struct Cli<Spec: ChainSpecParser = HlChainSpecParser, Ext: clap::Args + fmt::Debug = HlNodeArgs>
+{
     /// The command to run
     #[command(subcommand)]
     pub command: Commands<Spec, Ext>,

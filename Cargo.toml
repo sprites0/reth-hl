@@ -94,6 +94,9 @@ tracing = "0.1"
 rmp-serde = "1.0.0"
 lz4_flex = "0.11.3"
 ureq = "3.0.12"
+aws-sdk-s3 = "1.93.0"
+aws-config = "1.8.0"
+rayon = "1.10.0"
 
 
 [target.'cfg(unix)'.dependencies]
