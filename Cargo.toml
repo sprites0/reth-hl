@@ -17,6 +17,7 @@ reth-cli = { git = "https://github.com/sprites0/reth", rev = "131c608706ed662f16
 reth-cli-commands = { git = "https://github.com/sprites0/reth", rev = "131c608706ed662f16112eabaad9e8a5a0471ef4" }
 reth-basic-payload-builder = { git = "https://github.com/sprites0/reth", rev = "131c608706ed662f16112eabaad9e8a5a0471ef4" }
 reth-db = { git = "https://github.com/sprites0/reth", rev = "131c608706ed662f16112eabaad9e8a5a0471ef4" }
+reth-db-api = { git = "https://github.com/sprites0/reth", rev = "131c608706ed662f16112eabaad9e8a5a0471ef4" }
 reth-chainspec = { git = "https://github.com/sprites0/reth", rev = "131c608706ed662f16112eabaad9e8a5a0471ef4" }
 reth-cli-util = { git = "https://github.com/sprites0/reth", rev = "131c608706ed662f16112eabaad9e8a5a0471ef4" }
 reth-discv4 = { git = "https://github.com/sprites0/reth", rev = "131c608706ed662f16112eabaad9e8a5a0471ef4" }
