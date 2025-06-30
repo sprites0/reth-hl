@@ -222,7 +222,7 @@ where
     // Clear 0x00...08xx addresses
     let addresses = precompiles_mut.addresses().cloned().collect::<Vec<_>>();
     for address in addresses {
-        if address.starts_with(&[0u8; 18]) && address[19] == 8 {
+        if address.starts_with(&[0u8; 18]) && address[18] == 8 {
             precompiles_mut.apply_precompile(&address, |_| None);
         }
     }
