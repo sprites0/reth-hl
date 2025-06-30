@@ -164,7 +164,7 @@ impl<BS: BlockSource> PseudoPeer<BS> {
                 request: GetBlockHeaders { start_block, limit, skip, direction },
                 response,
             } => {
-                info!(
+                debug!(
                     "GetBlockHeaders request: {start_block:?}, {limit:?}, {skip:?}, {direction:?}"
                 );
 
@@ -187,7 +187,7 @@ impl<BS: BlockSource> PseudoPeer<BS> {
             }
             IncomingEthRequest::GetBlockBodies { peer_id: _, request, response } => {
                 let GetBlockBodies(hashes) = request;
-                info!("GetBlockBodies request: {}", hashes.len());
+                debug!("GetBlockBodies request: {}", hashes.len());
 
                 let mut numbers = Vec::new();
                 for hash in hashes {
@@ -204,10 +204,10 @@ impl<BS: BlockSource> PseudoPeer<BS> {
                 let _ = response.send(Ok(BlockBodies(block_bodies)));
             }
             IncomingEthRequest::GetNodeData { .. } => {
-                info!("GetNodeData request: {:?}", eth_req);
+                debug!("GetNodeData request: {:?}", eth_req);
             }
             eth_req => {
-                info!("New eth protocol request: {:?}", eth_req);
+                debug!("New eth protocol request: {:?}", eth_req);
             }
         }
         Ok(())
@@ -243,11 +243,11 @@ impl<BS: BlockSource> PseudoPeer<BS> {
         use jsonrpsee::http_client::HttpClientBuilder;
         use jsonrpsee_core::client::ClientT;
 
-        info!("Fallback to official RPC: {:?}", hash);
+        debug!("Fallback to official RPC: {:?}", hash);
         let client = HttpClientBuilder::default().build("https://rpc.hyperliquid.xyz/evm").unwrap();
         let target_block: Block = client.request("eth_getBlockByHash", (hash, false)).await?;
 
-        info!("From official RPC: {:?} for {hash:?}", target_block.header.number);
+        debug!("From official RPC: {:?} for {hash:?}", target_block.header.number);
         self.cache_blocks([(hash, target_block.header.number)]);
         Ok(target_block.header.number)
     }
@@ -271,7 +271,7 @@ impl<BS: BlockSource> PseudoPeer<BS> {
         latest: u64,
     ) -> eyre::Result<Option<u64>> {
         let chunk_size = self.block_source.recommended_chunk_size();
-        info!("Hash not found, backfilling... {:?}", target_hash);
+        debug!("Hash not found, backfilling... {:?}", target_hash);
 
         const TRY_OFFICIAL_RPC_THRESHOLD: usize = 20;
         for (iteration, end) in (1..=latest).rev().step_by(chunk_size as usize).enumerate() {
@@ -293,13 +293,13 @@ impl<BS: BlockSource> PseudoPeer<BS> {
                         return Ok(Some(block_number));
                     }
                     Err(e) => {
-                        info!("Fallback to official RPC failed: {:?}", e);
+                        debug!("Fallback to official RPC failed: {:?}", e);
                     }
                 }
             }
         }
 
-        info!("Hash not found: {:?}, retrying from the latest block...", target_hash);
+        debug!("Hash not found: {:?}, retrying from the latest block...", target_hash);
         Ok(None) // Not found
     }
 
@@ -330,11 +330,11 @@ impl<BS: BlockSource> PseudoPeer<BS> {
         }
 
         if uncached_block_numbers.is_empty() {
-            info!("All blocks are cached, returning None");
+            debug!("All blocks are cached, returning None");
             return Ok(None);
         }
 
-        info!("Backfilling from {} to {}", start_number, end_number);
+        debug!("Backfilling from {} to {}", start_number, end_number);
 
         // Collect blocks and cache them
         let blocks = self.collect_blocks(uncached_block_numbers).await;
