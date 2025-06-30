@@ -12,41 +12,41 @@ name = "reth-hl"
 path = "src/main.rs"
 
 [dependencies]
-reth = { path = "../reth/bin/reth" }
-reth-cli = { path = "../reth/crates/cli/cli" }
-reth-cli-commands = { path = "../reth/crates/cli/commands" }
-reth-basic-payload-builder = { path = "../reth/crates/payload/basic" }
-reth-db = { path = "../reth/crates/storage/db", default-features = false }
-reth-chainspec = { path = "../reth/crates/chainspec", default-features = false }
-reth-cli-util = { path = "../reth/crates/cli/util" }
-reth-discv4 = { path = "../reth/crates/net/discv4", features = ["test-utils"] }
-reth-engine-primitives = { path = "../reth/crates/engine/primitives", default-features = false }
-reth-ethereum-forks = { path = "../reth/crates/ethereum/hardforks", default-features = false, features = ["serde"] }
-reth-ethereum-payload-builder = { path = "../reth/crates/ethereum/payload" }
-reth-ethereum-primitives = { path = "../reth/crates/ethereum/primitives", default-features = false }
-reth-eth-wire = { path = "../reth/crates/net/eth-wire" }
-reth-eth-wire-types = { path = "../reth/crates/net/eth-wire-types" }
-reth-evm = { path = "../reth/crates/evm/evm", default-features = false }
-reth-evm-ethereum = { path = "../reth/crates/ethereum/evm", default-features = false }
-reth-node-core = { path = "../reth/crates/node/core" }
-reth-revm = { path = "../reth/crates/revm", default-features = false }
-reth-network = { path = "../reth/crates/net/network", features = ["test-utils"] }
-reth-network-p2p = { path = "../reth/crates/net/p2p" }
-reth-network-api = { path = "../reth/crates/net/network-api" }
-reth-node-ethereum = { path = "../reth/crates/ethereum/node", features = ["test-utils"] }
-reth-network-peers = { path = "../reth/crates/net/peers", default-features = false }
-reth-optimism-rpc = { path = "../reth/crates/optimism/rpc" }
-reth-payload-primitives = { path = "../reth/crates/payload/primitives" }
-reth-primitives = { path = "../reth/crates/primitives", default-features = false }
-reth-primitives-traits = { path = "../reth/crates/primitives-traits", default-features = false }
-reth-provider = { path = "../reth/crates/storage/provider", features = ["test-utils"] }
-reth-rpc-eth-api = { path = "../reth/crates/rpc/rpc-eth-api" }
-reth-rpc-engine-api = { path = "../reth/crates/rpc/rpc-engine-api" }
-reth-tracing = { path = "../reth/crates/tracing" }
-reth-trie-common = { path = "../reth/crates/trie/common", default-features = false }
-reth-trie-db = { path = "../reth/crates/trie/db" }
-reth-codecs = { path = "../reth/crates/storage/codecs" }
-reth-transaction-pool = { path = "../reth/crates/transaction-pool" }
+reth = { git = "https://github.com/sprites0/reth", rev = "131c608706ed662f16112eabaad9e8a5a0471ef4" }
+reth-cli = { git = "https://github.com/sprites0/reth", rev = "131c608706ed662f16112eabaad9e8a5a0471ef4" }
+reth-cli-commands = { git = "https://github.com/sprites0/reth", rev = "131c608706ed662f16112eabaad9e8a5a0471ef4" }
+reth-basic-payload-builder = { git = "https://github.com/sprites0/reth", rev = "131c608706ed662f16112eabaad9e8a5a0471ef4" }
+reth-db = { git = "https://github.com/sprites0/reth", rev = "131c608706ed662f16112eabaad9e8a5a0471ef4" }
+reth-chainspec = { git = "https://github.com/sprites0/reth", rev = "131c608706ed662f16112eabaad9e8a5a0471ef4" }
+reth-cli-util = { git = "https://github.com/sprites0/reth", rev = "131c608706ed662f16112eabaad9e8a5a0471ef4" }
+reth-discv4 = { git = "https://github.com/sprites0/reth", rev = "131c608706ed662f16112eabaad9e8a5a0471ef4" }
+reth-engine-primitives = { git = "https://github.com/sprites0/reth", rev = "131c608706ed662f16112eabaad9e8a5a0471ef4" }
+reth-ethereum-forks = { git = "https://github.com/sprites0/reth", rev = "131c608706ed662f16112eabaad9e8a5a0471ef4" }
+reth-ethereum-payload-builder = { git = "https://github.com/sprites0/reth", rev = "131c608706ed662f16112eabaad9e8a5a0471ef4" }
+reth-ethereum-primitives = { git = "https://github.com/sprites0/reth", rev = "131c608706ed662f16112eabaad9e8a5a0471ef4" }
+reth-eth-wire = { git = "https://github.com/sprites0/reth", rev = "131c608706ed662f16112eabaad9e8a5a0471ef4" }
+reth-eth-wire-types = { git = "https://github.com/sprites0/reth", rev = "131c608706ed662f16112eabaad9e8a5a0471ef4" }
+reth-evm = { git = "https://github.com/sprites0/reth", rev = "131c608706ed662f16112eabaad9e8a5a0471ef4" }
+reth-evm-ethereum = { git = "https://github.com/sprites0/reth", rev = "131c608706ed662f16112eabaad9e8a5a0471ef4" }
+reth-node-core = { git = "https://github.com/sprites0/reth", rev = "131c608706ed662f16112eabaad9e8a5a0471ef4" }
+reth-revm = { git = "https://github.com/sprites0/reth", rev = "131c608706ed662f16112eabaad9e8a5a0471ef4" }
+reth-network = { git = "https://github.com/sprites0/reth", rev = "131c608706ed662f16112eabaad9e8a5a0471ef4" }
+reth-network-p2p = { git = "https://github.com/sprites0/reth", rev = "131c608706ed662f16112eabaad9e8a5a0471ef4" }
+reth-network-api = { git = "https://github.com/sprites0/reth", rev = "131c608706ed662f16112eabaad9e8a5a0471ef4" }
+reth-node-ethereum = { git = "https://github.com/sprites0/reth", rev = "131c608706ed662f16112eabaad9e8a5a0471ef4" }
+reth-network-peers = { git = "https://github.com/sprites0/reth", rev = "131c608706ed662f16112eabaad9e8a5a0471ef4" }
+reth-optimism-rpc = { git = "https://github.com/sprites0/reth", rev = "131c608706ed662f16112eabaad9e8a5a0471ef4" }
+reth-payload-primitives = { git = "https://github.com/sprites0/reth", rev = "131c608706ed662f16112eabaad9e8a5a0471ef4" }
+reth-primitives = { git = "https://github.com/sprites0/reth", rev = "131c608706ed662f16112eabaad9e8a5a0471ef4" }
+reth-primitives-traits = { git = "https://github.com/sprites0/reth", rev = "131c608706ed662f16112eabaad9e8a5a0471ef4" }
+reth-provider = { git = "https://github.com/sprites0/reth", rev = "131c608706ed662f16112eabaad9e8a5a0471ef4", features = ["test-utils"] }
+reth-rpc-eth-api = { git = "https://github.com/sprites0/reth", rev = "131c608706ed662f16112eabaad9e8a5a0471ef4" }
+reth-rpc-engine-api = { git = "https://github.com/sprites0/reth", rev = "131c608706ed662f16112eabaad9e8a5a0471ef4" }
+reth-tracing = { git = "https://github.com/sprites0/reth", rev = "131c608706ed662f16112eabaad9e8a5a0471ef4" }
+reth-trie-common = { git = "https://github.com/sprites0/reth", rev = "131c608706ed662f16112eabaad9e8a5a0471ef4" }
+reth-trie-db = { git = "https://github.com/sprites0/reth", rev = "131c608706ed662f16112eabaad9e8a5a0471ef4" }
+reth-codecs = { git = "https://github.com/sprites0/reth", rev = "131c608706ed662f16112eabaad9e8a5a0471ef4" }
+reth-transaction-pool = { git = "https://github.com/sprites0/reth", rev = "131c608706ed662f16112eabaad9e8a5a0471ef4" }
 revm = { version = "24.0.1" }
 
 # alloy dependencies
