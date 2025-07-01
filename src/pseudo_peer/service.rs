@@ -204,10 +204,10 @@ impl<BS: BlockSource> PseudoPeer<BS> {
                 let _ = response.send(Ok(BlockBodies(block_bodies)));
             }
             IncomingEthRequest::GetNodeData { .. } => {
-                debug!("GetNodeData request: {:?}", eth_req);
+                debug!("GetNodeData request: {eth_req:?}");
             }
             eth_req => {
-                debug!("New eth protocol request: {:?}", eth_req);
+                debug!("New eth protocol request: {eth_req:?}");
             }
         }
         Ok(())
@@ -232,7 +232,7 @@ impl<BS: BlockSource> PseudoPeer<BS> {
             }
         }
 
-        panic!("Hash not found: {:?}", hash);
+        panic!("Hash not found: {hash:?}");
     }
 
     async fn fallback_to_official_rpc(&self, hash: B256) -> eyre::Result<u64> {
@@ -243,7 +243,7 @@ impl<BS: BlockSource> PseudoPeer<BS> {
         use jsonrpsee::http_client::HttpClientBuilder;
         use jsonrpsee_core::client::ClientT;
 
-        debug!("Fallback to official RPC: {:?}", hash);
+        debug!("Fallback to official RPC: {hash:?}");
         let client = HttpClientBuilder::default().build("https://rpc.hyperliquid.xyz/evm").unwrap();
         let target_block: Block = client.request("eth_getBlockByHash", (hash, false)).await?;
 
@@ -271,7 +271,7 @@ impl<BS: BlockSource> PseudoPeer<BS> {
         latest: u64,
     ) -> eyre::Result<Option<u64>> {
         let chunk_size = self.block_source.recommended_chunk_size();
-        debug!("Hash not found, backfilling... {:?}", target_hash);
+        debug!("Hash not found, backfilling... {target_hash:?}");
 
         const TRY_OFFICIAL_RPC_THRESHOLD: usize = 20;
         for (iteration, end) in (1..=latest).rev().step_by(chunk_size as usize).enumerate() {
@@ -293,13 +293,13 @@ impl<BS: BlockSource> PseudoPeer<BS> {
                         return Ok(Some(block_number));
                     }
                     Err(e) => {
-                        debug!("Fallback to official RPC failed: {:?}", e);
+                        debug!("Fallback to official RPC failed: {e:?}");
                     }
                 }
             }
         }
 
-        debug!("Hash not found: {:?}, retrying from the latest block...", target_hash);
+        debug!("Hash not found: {target_hash:?}, retrying from the latest block...");
         Ok(None) // Not found
     }
 
@@ -334,7 +334,7 @@ impl<BS: BlockSource> PseudoPeer<BS> {
             return Ok(None);
         }
 
-        debug!("Backfilling from {} to {}", start_number, end_number);
+        debug!("Backfilling from {start_number} to {end_number}");
 
         // Collect blocks and cache them
         let blocks = self.collect_blocks(uncached_block_numbers).await;

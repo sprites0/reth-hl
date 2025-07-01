@@ -71,7 +71,7 @@ pub async fn start_pseudo_peer(
     loop {
         tokio::select! {
             Some(event) = tokio_stream::StreamExt::next(&mut network_events) => {
-                info!("Network event: {:?}", event);
+                info!("Network event: {event:?}");
                 if matches!(event, NetworkEvent::ActivePeerSession { .. }) && first {
                     start_tx.send(()).await?;
                     first = false;

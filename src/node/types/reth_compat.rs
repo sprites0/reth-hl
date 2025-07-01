@@ -99,7 +99,7 @@ fn system_tx_to_reth_transaction(transaction: &SystemTx, chain_id: u64) -> TxSig
                     break spot.to_s();
                 }
 
-                info!("Contract not found: {:?} from spot mapping, fetching again...", to);
+                info!("Contract not found: {to:?} from spot mapping, fetching again...");
                 *EVM_MAP.write().unwrap() = erc20_contract_to_spot_token(chain_id).unwrap();
             }
         };
