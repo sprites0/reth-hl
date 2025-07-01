@@ -57,7 +57,7 @@ fn scan_hour_file(path: &Path, last_line: &mut usize, start_height: u64) -> Scan
     let mut new_blocks = Vec::<BlockAndReceipts>::new();
     let mut last_height = start_height;
     let lines: Vec<String> = reader.lines().collect::<Result<_, _>>().unwrap();
-    let skip = if *last_line == 0 { 0 } else { (last_line.clone()) - 1 };
+    let skip = if *last_line == 0 { 0 } else { *last_line - 1 };
 
     for (line_idx, line) in lines.iter().enumerate().skip(skip) {
         // Safety check ensuring efficiency
@@ -69,7 +69,7 @@ fn scan_hour_file(path: &Path, last_line: &mut usize, start_height: u64) -> Scan
         }
 
         let LocalBlockAndReceipts(_block_timestamp, parsed_block): LocalBlockAndReceipts =
-            serde_json::from_str(&line).expect("Failed to parse local block and receipts");
+            serde_json::from_str(line).expect("Failed to parse local block and receipts");
 
         let height = match &parsed_block.block {
             EvmBlock::Reth115(b) => {
@@ -107,7 +107,7 @@ impl BlockSource for HlNodeBlockSource {
             // Not a one liner (using .or) to include logs
             if let Some(block) = self.try_collect_local_block(height).await {
                 info!("Returning locally synced block for @ Height [{height}]");
-                return Ok(block);
+                Ok(block)
             } else {
                 self.fallback.collect_block(height).await
             }
@@ -154,13 +154,8 @@ impl HlNodeBlockSource {
                     if !new_blocks.is_empty() {
                         let mut u_cache = cache.lock().await;
                         for blk in new_blocks {
-                            let h = match &blk.block {
-                                EvmBlock::Reth115(b) => {
-                                    let block_number = b.header.header.number;
-                                    block_number
-                                }
-                            };
-                            u_cache.insert(h, blk);
+                            let EvmBlock::Reth115(b) = &blk.block;
+                            u_cache.insert(b.header.header.number, blk);
                         }
                         next_height = next_expected_height;
                     }
