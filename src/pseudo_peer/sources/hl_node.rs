@@ -22,9 +22,15 @@ const HOURLY_SUBDIR: &str = "hourly";
 /// In normal situation, 0~1 blocks will be cached.
 const CACHE_SIZE: u32 = 1000;
 
-/// Block source that tails the local ingest directory for the HL node.
+/// Block source that monitors the local ingest directory for the HL node.
 ///
-/// Originally written at https://github.com/hl-archive-node/nanoreth/pull/7
+/// In certain situations, the [hl-node][ref] may offer lower latency compared to S3.
+/// This block source caches blocks from the HL node to minimize latency,
+/// while still falling back to [super::LocalBlockSource] or [super::S3BlockSource] when needed.
+///
+/// Originally introduced in https://github.com/hl-archive-node/nanoreth/pull/7
+///
+/// [ref]: https://github.com/hyperliquid-dex/node
 #[derive(Debug, Clone)]
 pub struct HlNodeBlockSource {
     pub fallback: BlockSourceBoxed,
