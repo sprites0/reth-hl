@@ -31,6 +31,9 @@ use tracing::info;
 pub struct HlNodeArgs {
     #[command(flatten)]
     pub block_source_args: BlockSourceArgs,
+
+    #[arg(long, env = "UPSTREAM_RPC_URL")]
+    pub upstream_rpc_url: Option<String>,
 }
 
 /// The main reth_hl cli interface.
