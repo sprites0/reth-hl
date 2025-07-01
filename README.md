@@ -13,4 +13,4 @@ Heavily inspired by [reth-bsc](https://github.com/loocapro/reth-bsc).
 - [x] Downloader
   - [x] S3 format (file)
   - [x] S3 format (AWS API)
-  - [ ] hl-node format
+  - [x] hl-node format

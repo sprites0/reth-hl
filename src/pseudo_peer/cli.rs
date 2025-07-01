@@ -12,6 +12,9 @@ pub struct BlockSourceArgs {
     #[arg(long)]
     block_source: Option<String>,
 
+    #[arg(long)]
+    block_source_from_node: Option<String>,
+
     /// Shorthand of --block-source=s3://hl-mainnet-evm-blocks
     #[arg(long = "s3", default_value_t = false)]
     s3: bool,
@@ -29,11 +32,15 @@ impl BlockSourceArgs {
             ));
         };
 
-        let config = if let Some(bucket) = value.strip_prefix("s3://") {
+        let mut config = if let Some(bucket) = value.strip_prefix("s3://") {
             BlockSourceConfig::s3(bucket.to_string()).await
         } else {
             BlockSourceConfig::local(value.to_string())
         };
+
+        if let Some(block_source_from_node) = self.block_source_from_node.as_ref() {
+            config = config.with_block_source_from_node(block_source_from_node.to_string());
+        }
 
         Ok(config)
     }

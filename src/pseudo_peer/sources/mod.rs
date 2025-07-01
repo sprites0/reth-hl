@@ -9,6 +9,9 @@ use std::{
 };
 use tracing::info;
 
+mod hl_node;
+pub use hl_node::HlNodeBlockSource;
+
 pub trait BlockSource: Send + Sync + std::fmt::Debug + Unpin + 'static {
     fn collect_block(&self, height: u64) -> BoxFuture<eyre::Result<BlockAndReceipts>>;
     fn find_latest_block_number(&self) -> BoxFuture<Option<u64>>;
@@ -129,7 +132,7 @@ impl BlockSource for S3BlockSource {
     }
 
     fn recommended_chunk_size(&self) -> u64 {
-        100
+        1000
     }
 }
 
