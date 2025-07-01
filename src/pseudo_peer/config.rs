@@ -1,10 +1,10 @@
 use aws_config::BehaviorVersion;
 
-use super::sources::HlNodeBlockSource;
-
 use super::{
     consts::DEFAULT_S3_BUCKET,
-    sources::{BlockSourceBoxed, LocalBlockSource, S3BlockSource},
+    sources::{
+        BlockSourceBoxed, CachedBlockSource, HlNodeBlockSource, LocalBlockSource, S3BlockSource,
+    },
 };
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -43,7 +43,7 @@ impl BlockSourceConfig {
     }
 
     pub async fn create_block_source(&self) -> BlockSourceBoxed {
-        let block_source: BlockSourceBoxed = match &self.source_type {
+        match &self.source_type {
             BlockSourceType::S3 { bucket } => {
                 let client = aws_sdk_s3::Client::new(
                     &aws_config::defaults(BehaviorVersion::latest())
@@ -51,29 +51,34 @@ impl BlockSourceConfig {
                         .load()
                         .await,
                 );
-                let block_source = S3BlockSource::new(client, bucket.clone());
-                Arc::new(Box::new(block_source))
+                Arc::new(Box::new(S3BlockSource::new(client, bucket.clone())))
             }
             BlockSourceType::Local { path } => {
-                let block_source = LocalBlockSource::new(path.clone());
-                Arc::new(Box::new(block_source))
+                Arc::new(Box::new(LocalBlockSource::new(path.clone())))
             }
-        };
+        }
+    }
 
+    pub async fn create_block_source_from_node(
+        &self,
+        fallback_block_source: BlockSourceBoxed,
+    ) -> BlockSourceBoxed {
         let Some(block_source_from_node) = self.block_source_from_node.as_ref() else {
-            return block_source;
+            return fallback_block_source;
         };
 
-        let block_source = HlNodeBlockSource::new(
-            block_source.clone(),
-            PathBuf::from(block_source_from_node.clone()),
-        )
-        .await;
-        Arc::new(Box::new(block_source))
+        Arc::new(Box::new(
+            HlNodeBlockSource::new(
+                fallback_block_source,
+                PathBuf::from(block_source_from_node.clone()),
+            )
+            .await,
+        ))
     }
 
     pub async fn create_cached_block_source(&self) -> BlockSourceBoxed {
         let block_source = self.create_block_source().await;
-        Arc::new(Box::new(block_source))
+        let block_source = self.create_block_source_from_node(block_source).await;
+        Arc::new(Box::new(CachedBlockSource::new(block_source)))
     }
 }
