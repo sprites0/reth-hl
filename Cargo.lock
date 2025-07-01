@@ -9599,6 +9599,7 @@ dependencies = [
  "thiserror 1.0.69",
  "tikv-jemalloc-ctl",
  "tikv-jemallocator",
+ "time",
  "tokio",
  "tokio-stream",
  "tracing",

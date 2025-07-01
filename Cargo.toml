@@ -96,6 +96,7 @@ ureq = "3.0.12"
 aws-sdk-s3 = "1.93.0"
 aws-config = "1.8.0"
 rayon = "1.10.0"
+time = "0.3.41"
 
 
 [target.'cfg(unix)'.dependencies]
