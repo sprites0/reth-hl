@@ -83,9 +83,7 @@ eyre = "0.6"
 futures = "0.3"
 lazy_static = "1.4.0"
 once_cell = { version = "1.19", default-features = false, features = ["alloc"] }
-parity-bytes = { version = "0.1.2", default-features = false }
 parking_lot = "0.12"
-secp256k1 = { version = "0.28", features = ["global-context", "std", "recovery"], optional = true }
 serde = { version = "1.0", features = ["derive"], default-features = false }
 serde_json = "1.0"
 thiserror = "1.0"
@@ -106,14 +104,13 @@ tikv-jemallocator = { version = "0.6", optional = true }
 libc = "0.2"
 
 [features]
-default = ["secp256k1", "jemalloc"]
+default = ["jemalloc"]
 jemalloc = ["dep:tikv-jemallocator"]
 dev = [
     "reth-cli-commands/arbitrary",
     "reth/dev",
     "revm/dev",
 ]
-secp256k1 = ["dep:secp256k1"]
 
 serde = [
     "alloy-chains/serde",
@@ -135,7 +132,6 @@ serde = [
     "reth-trie-common/serde",
     "reth-trie-db/serde",
     "revm/serde",
-    "secp256k1/serde",
 ]
 
 client = [

@@ -129,7 +129,7 @@ dependencies = [
  "k256",
  "once_cell",
  "rand 0.8.5",
- "secp256k1 0.30.0",
+ "secp256k1",
  "serde",
  "serde_with",
  "thiserror 2.0.12",
@@ -3342,7 +3342,7 @@ dependencies = [
  "k256",
  "log",
  "rand 0.8.5",
- "secp256k1 0.30.0",
+ "secp256k1",
  "serde",
  "sha3",
  "zeroize",
@@ -5951,12 +5951,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "parity-bytes"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "16b56e3a2420138bdb970f84dfb9c774aea80fa0e7371549eedec0d80c209c67"
-
-[[package]]
 name = "parity-scale-codec"
 version = "3.7.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6955,7 +6949,7 @@ dependencies = [
  "reth-trie",
  "reth-trie-common",
  "reth-trie-db",
- "secp256k1 0.30.0",
+ "secp256k1",
  "serde",
  "serde_json",
  "tar",
@@ -6987,7 +6981,7 @@ dependencies = [
  "libc",
  "rand 0.8.5",
  "reth-fs-util",
- "secp256k1 0.30.0",
+ "secp256k1",
  "serde",
  "thiserror 2.0.12",
  "tikv-jemallocator",
@@ -7204,7 +7198,7 @@ dependencies = [
  "reth-net-nat",
  "reth-network-peers",
  "schnellru",
- "secp256k1 0.30.0",
+ "secp256k1",
  "serde",
  "thiserror 2.0.12",
  "tokio",
@@ -7230,7 +7224,7 @@ dependencies = [
  "reth-ethereum-forks",
  "reth-metrics",
  "reth-network-peers",
- "secp256k1 0.30.0",
+ "secp256k1",
  "thiserror 2.0.12",
  "tokio",
  "tracing",
@@ -7251,7 +7245,7 @@ dependencies = [
  "reth-network-peers",
  "reth-tokio-util",
  "schnellru",
- "secp256k1 0.30.0",
+ "secp256k1",
  "serde",
  "serde_with",
  "thiserror 2.0.12",
@@ -7310,7 +7304,7 @@ dependencies = [
  "pin-project",
  "rand 0.8.5",
  "reth-network-peers",
- "secp256k1 0.30.0",
+ "secp256k1",
  "sha2 0.10.9",
  "sha3",
  "thiserror 2.0.12",
@@ -8030,7 +8024,7 @@ dependencies = [
  "reth-transaction-pool",
  "rustc-hash 2.1.1",
  "schnellru",
- "secp256k1 0.30.0",
+ "secp256k1",
  "serde",
  "smallvec",
  "thiserror 2.0.12",
@@ -8093,7 +8087,7 @@ dependencies = [
  "alloy-primitives",
  "alloy-rlp",
  "enr",
- "secp256k1 0.30.0",
+ "secp256k1",
  "serde_with",
  "thiserror 2.0.12",
  "tokio",
@@ -8212,7 +8206,7 @@ dependencies = [
  "reth-tokio-util",
  "reth-tracing",
  "reth-transaction-pool",
- "secp256k1 0.30.0",
+ "secp256k1",
  "serde_json",
  "tokio",
  "tokio-stream",
@@ -8258,7 +8252,7 @@ dependencies = [
  "reth-storage-errors",
  "reth-tracing",
  "reth-transaction-pool",
- "secp256k1 0.30.0",
+ "secp256k1",
  "serde",
  "shellexpand",
  "strum 0.27.1",
@@ -8711,7 +8705,7 @@ dependencies = [
  "revm-bytecode",
  "revm-primitives",
  "revm-state",
- "secp256k1 0.30.0",
+ "secp256k1",
  "serde",
  "serde_with",
  "thiserror 2.0.12",
@@ -9560,7 +9554,6 @@ dependencies = [
  "libc",
  "lz4_flex",
  "once_cell",
- "parity-bytes",
  "parking_lot",
  "rayon",
  "reth",
@@ -9601,7 +9594,6 @@ dependencies = [
  "reth-trie-db",
  "revm",
  "rmp-serde",
- "secp256k1 0.28.2",
  "serde",
  "serde_json",
  "thiserror 1.0.69",
@@ -9791,7 +9783,7 @@ dependencies = [
  "p256 0.13.2",
  "revm-primitives",
  "ripemd",
- "secp256k1 0.30.0",
+ "secp256k1",
  "sha2 0.10.9",
 ]
 
@@ -10280,33 +10272,14 @@ dependencies = [
 
 [[package]]
 name = "secp256k1"
-version = "0.28.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d24b59d129cdadea20aea4fb2352fa053712e5d713eee47d700cd4b2bc002f10"
-dependencies = [
- "secp256k1-sys 0.9.2",
- "serde",
-]
-
-[[package]]
-name = "secp256k1"
 version = "0.30.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b50c5943d326858130af85e049f2661ba3c78b26589b8ab98e65e80ae44a1252"
 dependencies = [
  "bitcoin_hashes",
  "rand 0.8.5",
- "secp256k1-sys 0.10.1",
+ "secp256k1-sys",
  "serde",
-]
-
-[[package]]
-name = "secp256k1-sys"
-version = "0.9.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e5d1746aae42c19d583c3c1a8c646bfad910498e2051c551a7f2e3c0c9fbb7eb"
-dependencies = [
- "cc",
 ]
 
 [[package]]

@@ -192,7 +192,7 @@ pub(crate) fn collect_block(height: u64) -> Option<BlockAndReceipts> {
     let ingest_dir = "/home/user/personal/evm-blocks";
     let f = ((height - 1) / 1_000_000) * 1_000_000;
     let s = ((height - 1) / 1_000) * 1_000;
-    let path = format!("{}/{f}/{s}/{height}.rmp.lz4", ingest_dir);
+    let path = format!("{ingest_dir}/{f}/{s}/{height}.rmp.lz4");
     if std::path::Path::new(&path).exists() {
         let file = std::fs::File::open(path).unwrap();
         let file = std::io::BufReader::new(file);
