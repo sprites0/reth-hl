@@ -145,6 +145,8 @@ impl HlNodeBlockSource {
             let mut day_str = date_from_datetime(dt);
             let mut last_line = 0;
 
+            info!("Starting local ingest loop from height: {:?}", current_head);
+
             loop {
                 let hour_file = root.join(HOURLY_SUBDIR).join(&day_str).join(format!("{hour}"));
 
