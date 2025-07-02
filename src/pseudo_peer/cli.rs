@@ -22,6 +22,12 @@ pub struct BlockSourceArgs {
 
 impl BlockSourceArgs {
     pub async fn parse(&self) -> eyre::Result<BlockSourceConfig> {
+        let config = self.create_base_config().await?;
+        let config = self.apply_node_source_config(config);
+        Ok(config)
+    }
+
+    async fn create_base_config(&self) -> eyre::Result<BlockSourceConfig> {
         if self.s3 {
             return Ok(BlockSourceConfig::s3_default().await);
         }
@@ -32,17 +38,19 @@ impl BlockSourceArgs {
             ));
         };
 
-        let mut config = if let Some(bucket) = value.strip_prefix("s3://") {
-            BlockSourceConfig::s3(bucket.to_string()).await
+        if let Some(bucket) = value.strip_prefix("s3://") {
+            Ok(BlockSourceConfig::s3(bucket.to_string()).await)
         } else {
-            BlockSourceConfig::local(value.to_string())
+            Ok(BlockSourceConfig::local(value.to_string()))
+        }
+    }
+
+    fn apply_node_source_config(&self, config: BlockSourceConfig) -> BlockSourceConfig {
+        let Some(block_source_from_node) = self.block_source_from_node.as_ref() else {
+            return config;
         };
 
-        if let Some(block_source_from_node) = self.block_source_from_node.as_ref() {
-            config = config.with_block_source_from_node(block_source_from_node.to_string());
-        }
-
-        Ok(config)
+        config.with_block_source_from_node(block_source_from_node.to_string())
     }
 }
 
