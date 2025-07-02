@@ -6,7 +6,7 @@ use crate::{
         HlBlock, HlPrimitives,
     },
 };
-use alloy_consensus::BlockHeader;
+use alloy_consensus::{BlockHeader, ReceiptEnvelope, TxType};
 use alloy_primitives::B256;
 use reth::{
     api::NodeTypes,
@@ -15,7 +15,10 @@ use reth::{
     providers::{BlockReaderIdExt, ProviderHeader, ReceiptProvider, TransactionsProvider},
     rpc::{
         eth::EthApiTypes,
-        server_types::eth::{error::FromEvmError, EthApiError, EthReceiptBuilder, PendingBlock},
+        server_types::eth::{
+            error::FromEvmError, receipt::build_receipt, EthApiError, EthReceiptBuilder,
+            PendingBlock,
+        },
         types::{BlockId, TransactionReceipt},
     },
     transaction_pool::{PoolTransaction, TransactionPool},
@@ -165,6 +168,14 @@ where
             .ok_or(EthApiError::HeaderNotFound(hash.into()))?;
         let blob_params = self.provider().chain_spec().blob_params_at_timestamp(meta.timestamp);
 
-        Ok(EthReceiptBuilder::new(&tx.0, meta, &receipt, &all_receipts, blob_params)?.build())
+        Ok(build_receipt(&tx, meta, &receipt, &all_receipts, blob_params, |receipt_with_bloom| {
+            match receipt.tx_type {
+                TxType::Legacy => ReceiptEnvelope::Legacy(receipt_with_bloom),
+                TxType::Eip2930 => ReceiptEnvelope::Eip2930(receipt_with_bloom),
+                TxType::Eip1559 => ReceiptEnvelope::Eip1559(receipt_with_bloom),
+                TxType::Eip4844 => ReceiptEnvelope::Eip4844(receipt_with_bloom),
+                TxType::Eip7702 => ReceiptEnvelope::Eip7702(receipt_with_bloom),
+            }
+        })?)
     }
 }
