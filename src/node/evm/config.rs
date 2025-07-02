@@ -133,13 +133,12 @@ where
             requests_hash,
         };
 
-        let read_precompile_calls = ctx.read_precompile_calls.clone().into();
         Ok(Self::Block {
             header,
             body: HlBlockBody {
                 inner: BlockBody { transactions, ommers: Default::default(), withdrawals },
                 sidecars: None,
-                read_precompile_calls: Some(read_precompile_calls),
+                read_precompile_calls: Some(ctx.read_precompile_calls.clone().into()),
             },
         })
     }

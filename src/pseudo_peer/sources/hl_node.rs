@@ -1,6 +1,8 @@
-use std::io::{BufRead, BufReader};
-use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::{
+    io::{BufRead, BufReader},
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use eyre::ContextCompat;
 use futures::future::BoxFuture;

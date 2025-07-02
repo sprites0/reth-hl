@@ -1,6 +1,5 @@
 use clap::Parser;
 use reth::builder::NodeHandle;
-use reth_hl::tx_forwarder::{self, EthForwarderApiServer};
 use reth_hl::{
     chainspec::parser::HlChainSpecParser,
     node::{
@@ -8,6 +7,7 @@ use reth_hl::{
         storage::tables::Tables,
         HlNode,
     },
+    tx_forwarder::{self, EthForwarderApiServer},
 };
 use tracing::info;
 
