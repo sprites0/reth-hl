@@ -168,7 +168,7 @@ where
             .ok_or(EthApiError::HeaderNotFound(hash.into()))?;
         let blob_params = self.provider().chain_spec().blob_params_at_timestamp(meta.timestamp);
 
-        Ok(build_receipt(&tx, meta, &receipt, &all_receipts, blob_params, |receipt_with_bloom| {
+        build_receipt(&tx, meta, &receipt, &all_receipts, blob_params, |receipt_with_bloom| {
             match receipt.tx_type {
                 TxType::Legacy => ReceiptEnvelope::Legacy(receipt_with_bloom),
                 TxType::Eip2930 => ReceiptEnvelope::Eip2930(receipt_with_bloom),
@@ -176,6 +176,6 @@ where
                 TxType::Eip4844 => ReceiptEnvelope::Eip4844(receipt_with_bloom),
                 TxType::Eip7702 => ReceiptEnvelope::Eip7702(receipt_with_bloom),
             }
-        })?)
+        })
     }
 }
