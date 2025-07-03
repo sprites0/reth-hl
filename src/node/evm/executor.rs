@@ -16,8 +16,8 @@ use reth_evm::{
     block::{BlockValidationError, CommitChanges},
     eth::receipt_builder::ReceiptBuilder,
     execute::{BlockExecutionError, BlockExecutor},
-    precompiles::{DynPrecompile, PrecompilesMap},
-    Database, Evm, FromRecoveredTx, FromTxWithEncoded, IntoTxEnv, OnStateHook, RecoveredTx,
+    precompiles::{DynPrecompile, PrecompileInput, PrecompilesMap},
+    Database, Evm, FromRecoveredTx, FromTxWithEncoded, IntoTxEnv, OnStateHook,
 };
 use reth_provider::BlockExecutionResult;
 use reth_revm::State;
@@ -227,8 +227,8 @@ where
     for (address, precompile) in ctx.read_precompile_calls.iter() {
         let precompile = precompile.clone();
         precompiles_mut.apply_precompile(address, |_| {
-            Some(DynPrecompile::from(move |data: &[u8], gas: u64| {
-                run_precompile(&precompile, data, gas)
+            Some(DynPrecompile::from(move |input: PrecompileInput| -> PrecompileResult {
+                run_precompile(&precompile, input.data, input.gas)
             }))
         });
     }

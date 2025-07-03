@@ -1,29 +1,26 @@
 use super::HlEvmInner;
-use crate::evm::{handler::HlHandler, spec::HlSpecId, transaction::HlTxTr};
+use crate::evm::{spec::HlSpecId, transaction::HlTxTr};
 use revm::{
-    context::{ContextSetters, JournalOutput},
+    context::{result::HaltReason, ContextSetters},
     context_interface::{
         result::{EVMError, ExecutionResult, ResultAndState},
         Cfg, ContextTr, Database, JournalTr,
     },
-    handler::{instructions::EthInstructions, EthFrame, EvmTr, Handler, PrecompileProvider},
-    inspector::{InspectCommitEvm, InspectEvm, Inspector, InspectorHandler, JournalExt},
+    handler::{instructions::EthInstructions, PrecompileProvider},
+    inspector::{InspectCommitEvm, InspectEvm, Inspector, JournalExt},
     interpreter::{interpreter::EthInterpreter, InterpreterResult},
+    state::EvmState,
     DatabaseCommit, ExecuteCommitEvm, ExecuteEvm,
 };
 
 // Type alias for HL context
 pub trait HlContextTr:
-    ContextTr<Journal: JournalTr<FinalOutput = JournalOutput>, Tx: HlTxTr, Cfg: Cfg<Spec = HlSpecId>>
+    ContextTr<Journal: JournalTr<State = EvmState>, Tx: HlTxTr, Cfg: Cfg<Spec = HlSpecId>>
 {
 }
 
 impl<T> HlContextTr for T where
-    T: ContextTr<
-        Journal: JournalTr<FinalOutput = JournalOutput>,
-        Tx: HlTxTr,
-        Cfg: Cfg<Spec = HlSpecId>,
-    >
+    T: ContextTr<Journal: JournalTr<State = EvmState>, Tx: HlTxTr, Cfg: Cfg<Spec = HlSpecId>>
 {
 }
 
@@ -36,23 +33,32 @@ where
     CTX: HlContextTr + ContextSetters,
     PRECOMPILE: PrecompileProvider<CTX, Output = InterpreterResult>,
 {
-    type Output = Result<ResultAndState, HlError<CTX>>;
+    type ExecutionResult = ExecutionResult<HaltReason>;
+    type State = EvmState;
+    type Error = HlError<CTX>;
 
     type Tx = <CTX as ContextTr>::Tx;
 
     type Block = <CTX as ContextTr>::Block;
 
-    fn set_tx(&mut self, tx: Self::Tx) {
-        self.0.ctx.set_tx(tx);
+    #[inline]
+    fn transact_one(&mut self, tx: Self::Tx) -> Result<Self::ExecutionResult, Self::Error> {
+        self.0.transact_one(tx)
     }
 
+    #[inline]
+    fn finalize(&mut self) -> Self::State {
+        self.0.finalize()
+    }
+
+    #[inline]
     fn set_block(&mut self, block: Self::Block) {
-        self.0.ctx.set_block(block);
+        self.0.set_block(block);
     }
 
-    fn replay(&mut self) -> Self::Output {
-        let mut h = HlHandler::<_, _, EthFrame<_, _, _>>::new();
-        h.run(self)
+    #[inline]
+    fn replay(&mut self) -> Result<ResultAndState<HaltReason>, Self::Error> {
+        self.0.replay()
     }
 }
 
@@ -62,13 +68,8 @@ where
     CTX: HlContextTr<Db: DatabaseCommit> + ContextSetters,
     PRECOMPILE: PrecompileProvider<CTX, Output = InterpreterResult>,
 {
-    type CommitOutput = Result<ExecutionResult, HlError<CTX>>;
-
-    fn replay_commit(&mut self) -> Self::CommitOutput {
-        self.replay().map(|r| {
-            self.ctx().db().commit(r.state);
-            r.result
-        })
+    fn commit(&mut self, state: Self::State) {
+        self.0.commit(state);
     }
 }
 
@@ -82,12 +83,11 @@ where
     type Inspector = INSP;
 
     fn set_inspector(&mut self, inspector: Self::Inspector) {
-        self.0.inspector = inspector;
+        self.0.set_inspector(inspector);
     }
 
-    fn inspect_replay(&mut self) -> Self::Output {
-        let mut h = HlHandler::<_, _, EthFrame<_, _, _>>::new();
-        h.inspect_run(self)
+    fn inspect_one_tx(&mut self, tx: Self::Tx) -> Result<Self::ExecutionResult, Self::Error> {
+        self.0.inspect_one_tx(tx)
     }
 }
 

@@ -14,7 +14,6 @@ use alloy_consensus::{BlockHeader, Header, Transaction as _, TxReceipt, EMPTY_OM
 use alloy_eips::merge::BEACON_NONCE;
 use alloy_primitives::{Log, U256};
 use reth_chainspec::{EthChainSpec, EthereumHardforks, Hardforks};
-use reth_ethereum_forks::EthereumHardfork;
 use reth_evm::{
     block::{BlockExecutionError, BlockExecutorFactory, BlockExecutorFor},
     eth::{receipt_builder::ReceiptBuilder, EthBlockExecutionCtx},
@@ -67,7 +66,7 @@ where
             ..
         } = input;
 
-        let timestamp = evm_env.block_env.timestamp;
+        let timestamp = evm_env.block_env.timestamp.saturating_to();
 
         // Filter out system tx receipts
         let transactions_for_root: Vec<TransactionSigned> =
@@ -122,7 +121,7 @@ where
             mix_hash: evm_env.block_env.prevrandao.unwrap_or_default(),
             nonce: BEACON_NONCE.into(),
             base_fee_per_gas: Some(evm_env.block_env.basefee),
-            number: evm_env.block_env.number,
+            number: evm_env.block_env.number.saturating_to(),
             gas_limit: evm_env.block_env.gas_limit,
             difficulty: evm_env.block_env.difficulty,
             gas_used: *gas_used,
@@ -264,8 +263,6 @@ where
     }
 }
 
-const EIP1559_INITIAL_BASE_FEE: u64 = 0;
-
 impl ConfigureEvm for HlEvmConfig
 where
     Self: Send + Sync + Unpin + Clone + 'static,
@@ -297,7 +294,7 @@ where
             CfgEnv::new().with_chain_id(self.chain_spec().chain().id()).with_spec(spec);
 
         if let Some(blob_params) = &blob_params {
-            cfg_env.set_blob_max_count(blob_params.max_blob_count);
+            cfg_env.set_max_blobs_per_tx(blob_params.max_blobs_per_tx);
         }
 
         // TODO: enable only for system transactions
@@ -315,9 +312,9 @@ where
         let eth_spec = spec.into_eth_spec();
 
         let block_env = BlockEnv {
-            number: header.number(),
+            number: U256::from(header.number()),
             beneficiary: header.beneficiary(),
-            timestamp: header.timestamp(),
+            timestamp: U256::from(header.timestamp()),
             difficulty: if eth_spec >= SpecId::MERGE { U256::ZERO } else { header.difficulty() },
             prevrandao: if eth_spec >= SpecId::MERGE { header.mix_hash() } else { None },
             gas_limit: header.gas_limit(),
@@ -346,43 +343,19 @@ where
 
         // if the parent block did not have excess blob gas (i.e. it was pre-cancun), but it is
         // cancun now, we need to set the excess blob gas to the default value(0)
-        let blob_excess_gas_and_price = parent
-            .maybe_next_block_excess_blob_gas(
-                self.chain_spec().blob_params_at_timestamp(attributes.timestamp),
-            )
-            .or_else(|| (spec_id.into_eth_spec().is_enabled_in(SpecId::CANCUN)).then_some(0))
-            .map(|gas| BlobExcessGasAndPrice::new(gas, false));
+        let blob_excess_gas_and_price = spec_id
+            .into_eth_spec()
+            .is_enabled_in(SpecId::CANCUN)
+            .then_some(BlobExcessGasAndPrice { excess_blob_gas: 0, blob_gasprice: 0 });
 
-        let mut basefee = parent.next_block_base_fee(
+        let basefee = parent.next_block_base_fee(
             self.chain_spec().base_fee_params_at_timestamp(attributes.timestamp),
         );
 
-        let mut gas_limit = U256::from(parent.gas_limit);
-
-        // If we are on the London fork boundary, we need to multiply the parent's gas limit by the
-        // elasticity multiplier to get the new gas limit.
-        if self
-            .chain_spec()
-            .inner
-            .fork(EthereumHardfork::London)
-            .transitions_at_block(parent.number + 1)
-        {
-            let elasticity_multiplier = self
-                .chain_spec()
-                .base_fee_params_at_timestamp(attributes.timestamp)
-                .elasticity_multiplier;
-
-            // multiply the gas limit by the elasticity multiplier
-            gas_limit *= U256::from(elasticity_multiplier);
-
-            // set the base fee to the initial base fee from the EIP-1559 spec
-            basefee = Some(EIP1559_INITIAL_BASE_FEE)
-        }
-
         let block_env = BlockEnv {
-            number: parent.number() + 1,
+            number: U256::from(parent.number() + 1),
             beneficiary: attributes.suggested_fee_recipient,
-            timestamp: attributes.timestamp,
+            timestamp: U256::from(attributes.timestamp),
             difficulty: U256::ZERO,
             prevrandao: Some(attributes.prev_randao),
             gas_limit: attributes.gas_limit,

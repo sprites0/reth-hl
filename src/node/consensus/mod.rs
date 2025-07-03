@@ -135,7 +135,9 @@ impl<ChainSpec: EthChainSpec + HlHardforks> Consensus<HlBlock> for HlConsensus<C
 
 mod reth_copy;
 
-impl<ChainSpec: EthChainSpec + HlHardforks> FullConsensus<HlPrimitives> for HlConsensus<ChainSpec> {
+impl<ChainSpec: EthChainSpec<Header = alloy_consensus::Header> + HlHardforks>
+    FullConsensus<HlPrimitives> for HlConsensus<ChainSpec>
+{
     fn validate_block_post_execution(
         &self,
         block: &RecoveredBlock<HlBlock>,
