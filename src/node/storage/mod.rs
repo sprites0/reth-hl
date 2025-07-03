@@ -139,7 +139,7 @@ where
             inputs
                 .into_iter()
                 .map(|(header, transactions)| {
-                    (header, transactions.into_iter().map(|tx| tx.0).collect())
+                    (header, transactions.into_iter().map(|tx| tx.into_inner()).collect())
                 })
                 .collect(),
         )?;

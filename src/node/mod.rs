@@ -139,7 +139,7 @@ where
                 inner: BlockBody {
                     transactions: transactions
                         .into_transactions()
-                        .map(|tx| TransactionSigned(tx.inner.into_inner().into()))
+                        .map(|tx| TransactionSigned::Default(tx.inner.into_inner().into()))
                         .collect(),
                     ommers: Default::default(),
                     withdrawals,

@@ -47,19 +47,19 @@ impl TransactionSigned {
     fn to_reth_transaction(&self) -> TxSigned {
         match self.transaction.clone() {
             Transaction::Legacy(tx) => {
-                TxSigned(RethTxSigned::Legacy(Signed::new_unhashed(tx, self.signature)))
+                TxSigned::Default(RethTxSigned::Legacy(Signed::new_unhashed(tx, self.signature)))
             }
             Transaction::Eip2930(tx) => {
-                TxSigned(RethTxSigned::Eip2930(Signed::new_unhashed(tx, self.signature)))
+                TxSigned::Default(RethTxSigned::Eip2930(Signed::new_unhashed(tx, self.signature)))
             }
             Transaction::Eip1559(tx) => {
-                TxSigned(RethTxSigned::Eip1559(Signed::new_unhashed(tx, self.signature)))
+                TxSigned::Default(RethTxSigned::Eip1559(Signed::new_unhashed(tx, self.signature)))
             }
             Transaction::Eip4844(tx) => {
-                TxSigned(RethTxSigned::Eip4844(Signed::new_unhashed(tx, self.signature)))
+                TxSigned::Default(RethTxSigned::Eip4844(Signed::new_unhashed(tx, self.signature)))
             }
             Transaction::Eip7702(tx) => {
-                TxSigned(RethTxSigned::Eip7702(Signed::new_unhashed(tx, self.signature)))
+                TxSigned::Default(RethTxSigned::Eip7702(Signed::new_unhashed(tx, self.signature)))
             }
         }
     }
@@ -104,7 +104,7 @@ fn system_tx_to_reth_transaction(transaction: &SystemTx, chain_id: u64) -> TxSig
             }
         };
         let signature = Signature::new(U256::from(0x1), s, true);
-        TxSigned(RethTxSigned::Legacy(Signed::new_unhashed(tx.clone(), signature)))
+        TxSigned::Default(RethTxSigned::Legacy(Signed::new_unhashed(tx.clone(), signature)))
     }
 }
 
