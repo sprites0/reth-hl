@@ -3,7 +3,6 @@ use crate::{
     node::{
         primitives::TransactionSigned,
         rpc::{HlEthApi, HlNodeCore},
-        HlBlock, HlPrimitives,
     },
 };
 use alloy_consensus::{BlockHeader, ReceiptEnvelope, TxType};
@@ -16,8 +15,7 @@ use reth::{
     rpc::{
         eth::EthApiTypes,
         server_types::eth::{
-            error::FromEvmError, receipt::build_receipt, EthApiError, EthReceiptBuilder,
-            PendingBlock,
+            error::FromEvmError, receipt::build_receipt, EthApiError, PendingBlock,
         },
         types::{BlockId, TransactionReceipt},
     },
@@ -25,7 +23,8 @@ use reth::{
 };
 use reth_chainspec::{EthChainSpec, EthereumHardforks};
 use reth_evm::{ConfigureEvm, NextBlockEnvAttributes};
-use reth_primitives_traits::BlockBody as _;
+use reth_primitives::NodePrimitives;
+use reth_primitives_traits::{BlockBody as _, SignedTransaction as _};
 use reth_provider::{
     BlockReader, ChainSpecProvider, HeaderProvider, ProviderBlock, ProviderReceipt, ProviderTx,
     StateProviderFactory,
@@ -33,7 +32,7 @@ use reth_provider::{
 use reth_rpc_eth_api::{
     helpers::{EthBlocks, LoadBlock, LoadPendingBlock, LoadReceipt, SpawnBlocking},
     types::RpcTypes,
-    FromEthApiError, RpcNodeCore, RpcNodeCoreExt, RpcReceipt,
+    FromEthApiError, RpcConvert, RpcNodeCore, RpcNodeCoreExt, RpcReceipt,
 };
 
 impl<N> EthBlocks for HlEthApi<N>
@@ -68,7 +67,7 @@ where
                 .enumerate()
                 .map(|(idx, (tx, receipt))| {
                     let meta = TransactionMeta {
-                        tx_hash: *tx.0.tx_hash(),
+                        tx_hash: *tx.tx_hash(),
                         index: idx as u64,
                         block_hash,
                         block_number,
@@ -76,8 +75,15 @@ where
                         excess_blob_gas,
                         timestamp,
                     };
-                    EthReceiptBuilder::new(&tx.0, meta, receipt, &receipts, blob_params)
-                        .map(|builder| builder.build())
+                    build_receipt(tx, meta, receipt, &receipts, blob_params, |receipt_with_bloom| {
+                        match receipt.tx_type {
+                            TxType::Legacy => ReceiptEnvelope::Legacy(receipt_with_bloom),
+                            TxType::Eip2930 => ReceiptEnvelope::Eip2930(receipt_with_bloom),
+                            TxType::Eip1559 => ReceiptEnvelope::Eip1559(receipt_with_bloom),
+                            TxType::Eip4844 => ReceiptEnvelope::Eip4844(receipt_with_bloom),
+                            TxType::Eip7702 => ReceiptEnvelope::Eip7702(receipt_with_bloom),
+                        }
+                    })
                 })
                 .collect::<Result<Vec<_>, Self::Error>>()
                 .map(Some);
@@ -108,17 +114,23 @@ where
                 Header = alloy_rpc_types_eth::Header<ProviderHeader<Self::Provider>>,
             >,
             Error: FromEvmError<Self::Evm>,
+            RpcConvert: RpcConvert<Network = Self::NetworkTypes>,
         >,
     N: RpcNodeCore<
-        Provider: BlockReaderIdExt<
-            Transaction = TransactionSigned,
-            Block = HlBlock,
-            Receipt = Receipt,
-            Header = alloy_consensus::Header,
-        > + ChainSpecProvider<ChainSpec: EthChainSpec + EthereumHardforks>
+        Provider: BlockReaderIdExt
+                      + ChainSpecProvider<ChainSpec: EthChainSpec + EthereumHardforks>
                       + StateProviderFactory,
         Pool: TransactionPool<Transaction: PoolTransaction<Consensus = ProviderTx<N::Provider>>>,
-        Evm: ConfigureEvm<Primitives = HlPrimitives, NextBlockEnvCtx = NextBlockEnvAttributes>,
+        Evm: ConfigureEvm<
+            Primitives = <Self as RpcNodeCore>::Primitives,
+            NextBlockEnvCtx: From<NextBlockEnvAttributes>,
+        >,
+        Primitives: NodePrimitives<
+            BlockHeader = ProviderHeader<Self::Provider>,
+            SignedTx = ProviderTx<Self::Provider>,
+            Receipt = ProviderReceipt<Self::Provider>,
+            Block = ProviderBlock<Self::Provider>,
+        >,
     >,
 {
     #[inline]
@@ -141,7 +153,8 @@ where
             gas_limit: parent.gas_limit(),
             parent_beacon_block_root: parent.parent_beacon_block_root(),
             withdrawals: None,
-        })
+        }
+        .into())
     }
 }
 

@@ -7,8 +7,8 @@ use crate::evm::{
     spec::HlSpecId,
     transaction::HlTxEnv,
 };
-use reth_evm::{precompiles::PrecompilesMap, EvmEnv, EvmFactory};
-use reth_revm::{Context, Database};
+use reth_evm::{precompiles::PrecompilesMap, Database, EvmEnv, EvmFactory};
+use reth_revm::Context;
 use revm::{
     context::{
         result::{EVMError, HaltReason},
@@ -25,16 +25,15 @@ use revm::{
 pub struct HlEvmFactory;
 
 impl EvmFactory for HlEvmFactory {
-    type Evm<DB: Database<Error: Send + Sync + 'static>, I: Inspector<HlContext<DB>>> =
-        HlEvm<DB, I, Self::Precompiles>;
-    type Context<DB: Database<Error: Send + Sync + 'static>> = HlContext<DB>;
+    type Evm<DB: Database, I: Inspector<HlContext<DB>>> = HlEvm<DB, I, Self::Precompiles>;
+    type Context<DB: Database> = HlContext<DB>;
     type Tx = HlTxEnv<TxEnv>;
     type Error<DBError: core::error::Error + Send + Sync + 'static> = EVMError<DBError>;
     type HaltReason = HaltReason;
     type Spec = HlSpecId;
     type Precompiles = PrecompilesMap;
 
-    fn create_evm<DB: Database<Error: Send + Sync + 'static>>(
+    fn create_evm<DB: Database>(
         &self,
         db: DB,
         input: EvmEnv<HlSpecId>,

@@ -16,8 +16,8 @@ use reth_evm::{
     block::{BlockValidationError, CommitChanges},
     eth::receipt_builder::ReceiptBuilder,
     execute::{BlockExecutionError, BlockExecutor},
-    precompiles::{DynPrecompile, PrecompilesMap},
-    Database, Evm, FromRecoveredTx, FromTxWithEncoded, IntoTxEnv, OnStateHook, RecoveredTx,
+    precompiles::{DynPrecompile, PrecompileInput, PrecompilesMap},
+    Database, Evm, FromRecoveredTx, FromTxWithEncoded, IntoTxEnv, OnStateHook,
 };
 use reth_provider::BlockExecutionResult;
 use reth_revm::State;
@@ -133,24 +133,13 @@ where
 
     fn execute_transaction_with_commit_condition(
         &mut self,
-        _tx: impl ExecutableTx<Self>,
-        _f: impl FnOnce(&ExecutionResult<<Self::Evm as Evm>::HaltReason>) -> CommitChanges,
+        tx: impl ExecutableTx<Self>,
+        f: impl FnOnce(&ExecutionResult<<Self::Evm as Evm>::HaltReason>) -> CommitChanges,
     ) -> Result<Option<u64>, BlockExecutionError> {
-        Ok(Some(0))
-    }
-
-    fn execute_transaction_with_result_closure(
-        &mut self,
-        tx: impl ExecutableTx<Self>
-            + IntoTxEnv<<E as alloy_evm::Evm>::Tx>
-            + RecoveredTx<TransactionSigned>,
-        f: impl for<'b> FnOnce(&'b ExecutionResult<<E as alloy_evm::Evm>::HaltReason>),
-    ) -> Result<u64, BlockExecutionError> {
-        // Check if it's a system transaction
-        // let signer = tx.signer();
-        // let is_system_transaction = is_system_transaction(tx.tx());
-
+        // The sum of the transaction's gas limit, Tg, and the gas utilized in this block prior,
+        // must be no greater than the block's gasLimit.
         let block_available_gas = self.evm.block().gas_limit - self.gas_used;
+
         if tx.tx().gas_limit() > block_available_gas {
             return Err(BlockValidationError::TransactionGasLimitMoreThanAvailableBlockGas {
                 transaction_gas_limit: tx.tx().gas_limit(),
@@ -158,25 +147,33 @@ where
             }
             .into());
         }
-        let result_and_state = self
+
+        // Execute transaction.
+        let ResultAndState { result, mut state } = self
             .evm
             .transact(tx)
             .map_err(|err| BlockExecutionError::evm(err, tx.tx().trie_hash()))?;
-        let ResultAndState { result, mut state } = result_and_state;
-        f(&result);
+
+        if !f(&result).should_commit() {
+            return Ok(None);
+        }
+
         let gas_used = result.gas_used();
+
+        // append gas used
         if !is_system_transaction(tx.tx()) {
             self.gas_used += gas_used;
         }
 
         // apply patches after
         patch_mainnet_after_tx(
-            self.evm.block().number,
+            self.evm.block().number.saturating_to(),
             self.receipts.len() as u64,
             is_system_transaction(tx.tx()),
             &mut state,
         )?;
 
+        // Push transaction changeset and calculate header bloom filter for receipt.
         self.receipts.push(self.receipt_builder.build_receipt(ReceiptBuilderCtx {
             tx: tx.tx(),
             evm: &self.evm,
@@ -185,9 +182,10 @@ where
             cumulative_gas_used: self.gas_used,
         }));
 
+        // Commit the state changes.
         self.evm.db_mut().commit(state);
 
-        Ok(gas_used)
+        Ok(Some(gas_used))
     }
 
     fn finish(self) -> Result<(Self::Evm, BlockExecutionResult<R::Receipt>), BlockExecutionError> {
@@ -229,8 +227,8 @@ where
     for (address, precompile) in ctx.read_precompile_calls.iter() {
         let precompile = precompile.clone();
         precompiles_mut.apply_precompile(address, |_| {
-            Some(DynPrecompile::from(move |data: &[u8], gas: u64| {
-                run_precompile(&precompile, data, gas)
+            Some(DynPrecompile::from(move |input: PrecompileInput| -> PrecompileResult {
+                run_precompile(&precompile, input.data, input.gas)
             }))
         });
     }
