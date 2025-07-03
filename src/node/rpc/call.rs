@@ -1,21 +1,15 @@
 use super::{HlEthApi, HlNodeCore};
 use crate::evm::transaction::HlTxEnv;
-use alloy_consensus::TxType;
-use alloy_primitives::{TxKind, U256};
 use alloy_rpc_types::TransactionRequest;
-use alloy_signer::Either;
-use reth::rpc::server_types::eth::{revm_utils::CallFees, EthApiError, RpcInvalidTransactionError};
-use reth_evm::{block::BlockExecutorFactory, ConfigureEvm, EvmEnv, EvmFactory, SpecFor};
+use reth::rpc::server_types::eth::EthApiError;
+use reth_evm::{block::BlockExecutorFactory, ConfigureEvm, EvmFactory, TxEnvFor};
 use reth_primitives::NodePrimitives;
-use reth_provider::{ProviderHeader, ProviderTx};
+use reth_provider::{ProviderError, ProviderHeader, ProviderTx};
 use reth_rpc_eth_api::{
     helpers::{estimate::EstimateCall, Call, EthCall, LoadBlock, LoadState, SpawnBlocking},
-    FromEthApiError, FromEvmError, FullEthApiTypes, IntoEthApiError,
+    FromEvmError, FullEthApiTypes, RpcConvert, RpcTypes,
 };
-use revm::{
-    context::{Block as _, TxEnv},
-    Database,
-};
+use revm::context::TxEnv;
 
 impl<N> EthCall for HlEthApi<N>
 where
@@ -44,7 +38,11 @@ where
                     EvmFactory: EvmFactory<Tx = HlTxEnv<TxEnv>>,
                 >,
             >,
-            Error: FromEvmError<Self::Evm>,
+            RpcConvert: RpcConvert<TxEnv = TxEnvFor<Self::Evm>, Network = Self::NetworkTypes>,
+            NetworkTypes: RpcTypes<TransactionRequest: From<TransactionRequest>>,
+            Error: FromEvmError<Self::Evm>
+                       + From<<Self::RpcConvert as RpcConvert>::Error>
+                       + From<ProviderError>,
         > + SpawnBlocking,
     Self::Error: From<EthApiError>,
     N: HlNodeCore,

@@ -20,7 +20,6 @@ use reth::{
 };
 use reth_evm::ConfigureEvm;
 use reth_network::NetworkInfo;
-use reth_optimism_rpc::eth::EthApiNodeBackend;
 use reth_primitives::NodePrimitives;
 use reth_provider::{
     BlockNumReader, BlockReader, BlockReaderIdExt, ProviderBlock, ProviderHeader, ProviderReceipt,
@@ -31,11 +30,11 @@ use reth_rpc_eth_api::{
         AddDevSigners, EthApiSpec, EthFees, EthSigner, EthState, LoadBlock, LoadFee, LoadState,
         SpawnBlocking, Trace,
     },
-    EthApiTypes, FromEvmError, RpcNodeCore, RpcNodeCoreExt,
+    EthApiTypes, FromEvmError, RpcConverter, RpcNodeCore, RpcNodeCoreExt,
 };
 use std::{fmt, sync::Arc};
 
-use crate::HlPrimitives;
+use reth_optimism_rpc::eth::EthApiNodeBackend;
 
 mod block;
 mod call;
@@ -57,6 +56,8 @@ pub(crate) struct HlEthApiInner<N: HlNodeCore> {
 pub struct HlEthApi<N: HlNodeCore> {
     /// Gateway to node's core components.
     pub(crate) inner: Arc<HlEthApiInner<N>>,
+    /// Converter for RPC types.
+    tx_resp_builder: RpcConverter<Ethereum, N::Evm, EthApiError, ()>,
 }
 
 impl<N: HlNodeCore> fmt::Debug for HlEthApi<N> {
@@ -69,13 +70,14 @@ impl<N> EthApiTypes for HlEthApi<N>
 where
     Self: Send + Sync,
     N: HlNodeCore,
+    N::Evm: std::fmt::Debug,
 {
     type Error = EthApiError;
     type NetworkTypes = Ethereum;
-    type TransactionCompat = Self;
+    type RpcConvert = RpcConverter<Ethereum, N::Evm, EthApiError, ()>;
 
-    fn tx_resp_builder(&self) -> &Self::TransactionCompat {
-        self
+    fn tx_resp_builder(&self) -> &Self::RpcConvert {
+        &self.tx_resp_builder
     }
 }
 
@@ -83,7 +85,7 @@ impl<N> RpcNodeCore for HlEthApi<N>
 where
     N: HlNodeCore,
 {
-    type Primitives = HlPrimitives;
+    type Primitives = N::Primitives;
     type Provider = N::Provider;
     type Pool = N::Pool;
     type Evm = <N as RpcNodeCore>::Evm;
@@ -152,6 +154,7 @@ impl<N> SpawnBlocking for HlEthApi<N>
 where
     Self: Send + Sync + Clone + 'static,
     N: HlNodeCore,
+    N::Evm: std::fmt::Debug,
 {
     #[inline]
     fn io_task_spawner(&self) -> impl TaskSpawner {
@@ -189,11 +192,13 @@ where
     }
 }
 
-impl<N> LoadState for HlEthApi<N> where
+impl<N> LoadState for HlEthApi<N>
+where
     N: HlNodeCore<
         Provider: StateProviderFactory + ChainSpecProvider<ChainSpec: EthereumHardforks>,
         Pool: TransactionPool,
-    >
+    >,
+    N::Evm: std::fmt::Debug,
 {
 }
 
@@ -210,7 +215,11 @@ where
 
 impl<N> EthFees for HlEthApi<N>
 where
-    Self: LoadFee,
+    Self: LoadFee<
+        Provider: ChainSpecProvider<
+            ChainSpec: EthChainSpec<Header = ProviderHeader<Self::Provider>>,
+        >,
+    >,
     N: HlNodeCore,
 {
 }
@@ -268,6 +277,9 @@ where
         .proof_permits(ctx.config.proof_permits)
         .build_inner();
 
-        Ok(HlEthApi { inner: Arc::new(HlEthApiInner { eth_api }) })
+        Ok(HlEthApi {
+            inner: Arc::new(HlEthApiInner { eth_api }),
+            tx_resp_builder: Default::default(),
+        })
     }
 }

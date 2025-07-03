@@ -1,28 +1,14 @@
 use super::HlNodeCore;
-use crate::{
-    node::{
-        primitives::{tx_wrapper::convert_recovered, TransactionSigned},
-        rpc::HlEthApi,
-    },
-    HlPrimitives,
-};
-use alloy_network::{Ethereum, Network};
-use alloy_primitives::{Bytes, Signature, B256};
+use crate::node::rpc::HlEthApi;
+use alloy_primitives::{Bytes, B256};
 use reth::{
-    builder::FullNodeComponents,
-    primitives::{Receipt, Recovered},
-    providers::ReceiptProvider,
-    rpc::{
-        eth::helpers::types::EthRpcConverter,
-        server_types::eth::{utils::recover_raw_transaction, EthApiError},
-        types::{TransactionInfo, TransactionRequest},
-    },
+    rpc::server_types::eth::utils::recover_raw_transaction,
     transaction_pool::{PoolTransaction, TransactionOrigin, TransactionPool},
 };
 use reth_provider::{BlockReader, BlockReaderIdExt, ProviderTx, TransactionsProvider};
 use reth_rpc_eth_api::{
     helpers::{EthSigner, EthTransactions, LoadTransaction, SpawnBlocking},
-    FromEthApiError, FullEthApiTypes, RpcNodeCore, RpcNodeCoreExt, TransactionCompat,
+    FromEthApiError, FullEthApiTypes, RpcNodeCore, RpcNodeCoreExt,
 };
 
 impl<N> LoadTransaction for HlEthApi<N>
@@ -31,41 +17,6 @@ where
     N: HlNodeCore<Provider: TransactionsProvider, Pool: TransactionPool>,
     Self::Pool: TransactionPool,
 {
-}
-
-impl<N> TransactionCompat for HlEthApi<N>
-where
-    N: FullNodeComponents<Provider: ReceiptProvider<Receipt = Receipt>>,
-{
-    type Primitives = HlPrimitives;
-    type Transaction = <Ethereum as Network>::TransactionResponse;
-
-    type Error = EthApiError;
-
-    fn fill(
-        &self,
-        tx: Recovered<TransactionSigned>,
-        tx_info: TransactionInfo,
-    ) -> Result<Self::Transaction, Self::Error> {
-        let builder = EthRpcConverter::default();
-        builder.fill(convert_recovered(tx), tx_info)
-    }
-
-    fn build_simulate_v1_transaction(
-        &self,
-        request: TransactionRequest,
-    ) -> Result<TransactionSigned, Self::Error> {
-        let Ok(tx) = request.build_typed_tx() else {
-            return Err(EthApiError::TransactionConversionError);
-        };
-
-        // Create an empty signature for the transaction.
-        let signature = Signature::new(Default::default(), Default::default(), false);
-        Ok(TransactionSigned(reth_primitives::TransactionSigned::new_unhashed(
-            tx.into(),
-            signature,
-        )))
-    }
 }
 
 impl<N> EthTransactions for HlEthApi<N>
