@@ -9,15 +9,19 @@ pub struct BlockSourceArgs {
     /// Example: /home/user/personal/evm-blocks
     ///
     /// For S3, you can use environment variables like AWS_PROFILE, etc.
-    #[arg(long)]
+    #[arg(long, alias = "ingest-dir")]
     block_source: Option<String>,
 
-    #[arg(long)]
+    #[arg(long, alias = "local-ingest-dir")]
     block_source_from_node: Option<String>,
 
     /// Shorthand of --block-source=s3://hl-mainnet-evm-blocks
-    #[arg(long = "s3", default_value_t = false)]
+    #[arg(long, default_value_t = false)]
     s3: bool,
+
+    /// Shorthand of --block-source-from-node=~/hl/data/evm_blocks_and_receipts
+    #[arg(long)]
+    local: bool,
 }
 
 impl BlockSourceArgs {
@@ -30,6 +34,10 @@ impl BlockSourceArgs {
     async fn create_base_config(&self) -> eyre::Result<BlockSourceConfig> {
         if self.s3 {
             return Ok(BlockSourceConfig::s3_default().await);
+        }
+
+        if self.local {
+            return Ok(BlockSourceConfig::local_default());
         }
 
         let Some(value) = self.block_source.as_ref() else {

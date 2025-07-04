@@ -35,6 +35,19 @@ impl BlockSourceConfig {
         Self { source_type: BlockSourceType::Local { path }, block_source_from_node: None }
     }
 
+    pub fn local_default() -> Self {
+        Self {
+            source_type: BlockSourceType::Local {
+                path: home_dir()
+                    .expect("home dir not found")
+                    .join("hl")
+                    .join("data")
+                    .join("evm_blocks_and_receipts"),
+            },
+            block_source_from_node: None,
+        }
+    }
+
     pub fn with_block_source_from_node(mut self, block_source_from_node: String) -> Self {
         self.block_source_from_node = Some(block_source_from_node);
         self
