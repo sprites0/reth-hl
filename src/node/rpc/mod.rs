@@ -9,7 +9,7 @@ use reth::{
     primitives::EthereumHardforks,
     providers::ChainSpecProvider,
     rpc::{
-        eth::{DevSigner, FullEthApiServer},
+        eth::{core::EthApiInner, DevSigner, FullEthApiServer},
         server_types::eth::{EthApiError, EthStateCache, FeeHistoryCache, GasPriceOracle},
     },
     tasks::{
@@ -34,8 +34,6 @@ use reth_rpc_eth_api::{
 };
 use std::{fmt, sync::Arc};
 
-use reth_optimism_rpc::eth::EthApiNodeBackend;
-
 mod block;
 mod call;
 pub mod engine_api;
@@ -44,6 +42,14 @@ mod transaction;
 /// A helper trait with requirements for [`RpcNodeCore`] to be used in [`HlEthApi`].
 pub trait HlNodeCore: RpcNodeCore<Provider: BlockReader> {}
 impl<T> HlNodeCore for T where T: RpcNodeCore<Provider: BlockReader> {}
+
+/// Adapter for [`EthApiInner`], which holds all the data required to serve core `eth_` API.
+pub type EthApiNodeBackend<N> = EthApiInner<
+    <N as RpcNodeCore>::Provider,
+    <N as RpcNodeCore>::Pool,
+    <N as RpcNodeCore>::Network,
+    <N as RpcNodeCore>::Evm,
+>;
 
 /// Container type `HlEthApi`
 #[allow(missing_debug_implementations)]
@@ -58,6 +64,8 @@ pub struct HlEthApi<N: HlNodeCore> {
     pub(crate) inner: Arc<HlEthApiInner<N>>,
     /// Converter for RPC types.
     tx_resp_builder: RpcConverter<Ethereum, N::Evm, EthApiError, ()>,
+    /// Whether the node is in HL node compliant mode.
+    pub(crate) hl_node_compliant: bool,
 }
 
 impl<N: HlNodeCore> fmt::Debug for HlEthApi<N> {
