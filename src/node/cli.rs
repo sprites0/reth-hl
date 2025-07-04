@@ -32,9 +32,16 @@ pub struct HlNodeArgs {
     #[command(flatten)]
     pub block_source_args: BlockSourceArgs,
 
+    /// Upstream RPC URL to forward incoming transactions.
     #[arg(long, env = "UPSTREAM_RPC_URL")]
     pub upstream_rpc_url: Option<String>,
 
+    /// Enable hl-node compliant mode.
+    ///
+    /// This option
+    /// 1. filters out system transactions from block transaction list.
+    /// 2. filters out logs that are not from the block's transactions.
+    /// 3. filters out logs and transactions from subscription.
     #[arg(long, env = "HL_NODE_COMPLIANT")]
     pub hl_node_compliant: bool,
 }
