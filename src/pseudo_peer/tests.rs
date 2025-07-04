@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use crate::pseudo_peer::{prelude::*, BlockSourceType};
 
 #[tokio::test]
@@ -10,8 +12,10 @@ async fn test_block_source_config_s3() {
 
 #[tokio::test]
 async fn test_block_source_config_local() {
-    let config = BlockSourceConfig::local("/test/path".to_string());
-    assert!(matches!(config.source_type, BlockSourceType::Local { path } if path == "/test/path"));
+    let config = BlockSourceConfig::local("/test/path".into());
+    assert!(
+        matches!(config.source_type, BlockSourceType::Local { path } if path == Path::new("/test/path"))
+    );
 }
 
 #[test]

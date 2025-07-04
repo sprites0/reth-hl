@@ -1,12 +1,11 @@
-use aws_config::BehaviorVersion;
-
 use super::{
     consts::DEFAULT_S3_BUCKET,
     sources::{
         BlockSourceBoxed, CachedBlockSource, HlNodeBlockSource, LocalBlockSource, S3BlockSource,
     },
 };
-use std::{path::PathBuf, sync::Arc};
+use aws_config::BehaviorVersion;
+use std::{env::home_dir, path::PathBuf, sync::Arc};
 
 #[derive(Debug, Clone)]
 pub struct BlockSourceConfig {
@@ -17,7 +16,7 @@ pub struct BlockSourceConfig {
 #[derive(Debug, Clone)]
 pub enum BlockSourceType {
     S3 { bucket: String },
-    Local { path: String },
+    Local { path: PathBuf },
 }
 
 impl BlockSourceConfig {
@@ -32,7 +31,7 @@ impl BlockSourceConfig {
         Self { source_type: BlockSourceType::S3 { bucket }, block_source_from_node: None }
     }
 
-    pub fn local(path: String) -> Self {
+    pub fn local(path: PathBuf) -> Self {
         Self { source_type: BlockSourceType::Local { path }, block_source_from_node: None }
     }
 

@@ -41,7 +41,7 @@ impl BlockSourceArgs {
         if let Some(bucket) = value.strip_prefix("s3://") {
             Ok(BlockSourceConfig::s3(bucket.to_string()).await)
         } else {
-            Ok(BlockSourceConfig::local(value.to_string()))
+            Ok(BlockSourceConfig::local(value.into()))
         }
     }
 
