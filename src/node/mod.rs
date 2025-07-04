@@ -51,14 +51,23 @@ pub struct HlNode {
     engine_handle_rx:
         Arc<Mutex<Option<oneshot::Receiver<BeaconConsensusEngineHandle<HlPayloadTypes>>>>>,
     block_source_config: BlockSourceConfig,
+    hl_node_compliant: bool,
 }
 
 impl HlNode {
     pub fn new(
         block_source_config: BlockSourceConfig,
+        hl_node_compliant: bool,
     ) -> (Self, oneshot::Sender<BeaconConsensusEngineHandle<HlPayloadTypes>>) {
         let (tx, rx) = oneshot::channel();
-        (Self { engine_handle_rx: Arc::new(Mutex::new(Some(rx))), block_source_config }, tx)
+        (
+            Self {
+                engine_handle_rx: Arc::new(Mutex::new(Some(rx))),
+                block_source_config,
+                hl_node_compliant,
+            },
+            tx,
+        )
     }
 }
 
@@ -121,7 +130,12 @@ where
     }
 
     fn add_ons(&self) -> Self::AddOns {
-        HlNodeAddOns::default()
+        HlNodeAddOns::new(
+            HlEthApiBuilder { hl_node_compliant: self.hl_node_compliant },
+            Default::default(),
+            Default::default(),
+            Default::default(),
+        )
     }
 }
 

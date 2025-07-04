@@ -34,6 +34,9 @@ pub struct HlNodeArgs {
 
     #[arg(long, env = "UPSTREAM_RPC_URL")]
     pub upstream_rpc_url: Option<String>,
+
+    #[arg(long, env = "HL_NODE_COMPLIANT")]
+    pub hl_node_compliant: bool,
 }
 
 /// The main reth_hl cli interface.
