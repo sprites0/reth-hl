@@ -258,17 +258,11 @@ where
 }
 
 /// Builds [`HlEthApi`] for HL.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 #[non_exhaustive]
 pub struct HlEthApiBuilder {
     /// Whether the node is in HL node compliant mode.
     pub(crate) hl_node_compliant: bool,
-}
-
-impl Default for HlEthApiBuilder {
-    fn default() -> Self {
-        Self { hl_node_compliant: false }
-    }
 }
 
 impl<N> EthApiBuilder<N> for HlEthApiBuilder

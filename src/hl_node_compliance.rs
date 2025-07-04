@@ -147,7 +147,7 @@ impl<Eth: EthWrapper> EthFilterApiServer<RpcTransaction<Eth::NetworkTypes>>
                 transactions
                     .iter()
                     .filter(|tx| tx.is_system_transaction())
-                    .map(|tx| tx.tx_hash().clone())
+                    .map(|tx| *tx.tx_hash())
                     .collect::<Vec<_>>()
             })
             .collect();
@@ -216,12 +216,10 @@ impl<Eth: EthWrapper> EthPubSubApiServer<RpcTransaction<Eth::NetworkTypes>>
 fn not_from_system_tx<Eth: EthWrapper>(log: &Log, provider: &Eth::Provider) -> bool {
     let block = provider.block_by_number(log.block_number.unwrap()).unwrap().unwrap();
     let transactions = block.body.transactions().collect::<Vec<_>>();
-    transactions
+    !transactions
         .iter()
         .filter(|tx| tx.is_system_transaction())
-        .map(|tx| tx.tx_hash().clone())
-        .find(|tx_hash| tx_hash == &log.transaction_hash.unwrap())
-        .is_none()
+        .map(|tx| *tx.tx_hash()).any(|tx_hash| tx_hash == log.transaction_hash.unwrap())
 }
 
 /// Helper to convert a serde error into an [`ErrorObject`]

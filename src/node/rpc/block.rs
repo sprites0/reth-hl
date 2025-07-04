@@ -145,7 +145,7 @@ where
 
             if let Some(recovered_block) = recovered_block {
                 let recovered_block = if hl_node_compliant {
-                    filter_if_hl_node_compliant(&*recovered_block)
+                    filter_if_hl_node_compliant(&recovered_block)
                 } else {
                     (*recovered_block).clone()
                 };
@@ -167,7 +167,7 @@ fn filter_if_hl_node_compliant(
         .position(|tx| !tx.is_system_transaction())
         .unwrap_or(transactions.len());
 
-    let mut new_block: HlBlock = sealed_block.clone_block().into();
+    let mut new_block: HlBlock = sealed_block.clone_block();
     new_block.body.transactions.drain(..to_skip);
     let new_sealed_block = SealedBlock::new_unchecked(new_block, sealed_block.hash());
     let new_senders = recovered_block.senders()[to_skip..].to_vec();
