@@ -33,6 +33,8 @@ pub struct HlNodeArgs {
     pub block_source_args: BlockSourceArgs,
 
     /// Upstream RPC URL to forward incoming transactions.
+    ///
+    /// Default to Hyperliquid's RPC URL when not provided (https://rpc.hyperliquid.xyz/evm).
     #[arg(long, env = "UPSTREAM_RPC_URL")]
     pub upstream_rpc_url: Option<String>,
 
