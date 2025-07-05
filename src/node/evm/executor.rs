@@ -10,7 +10,7 @@ use crate::{
 use alloy_consensus::{Transaction, TxReceipt};
 use alloy_eips::{eip7685::Requests, Encodable2718};
 use alloy_evm::{block::ExecutableTx, eth::receipt_builder::ReceiptBuilderCtx};
-use alloy_primitives::Bytes;
+use alloy_primitives::{address, hex, Address, Bytes, U256};
 use reth_chainspec::{EthChainSpec, EthereumHardforks, Hardforks};
 use reth_evm::{
     block::{BlockValidationError, CommitChanges},
@@ -28,6 +28,7 @@ use revm::{
     },
     precompile::{PrecompileError, PrecompileOutput, PrecompileResult},
     primitives::HashMap,
+    state::Bytecode,
     DatabaseCommit,
 };
 
@@ -103,6 +104,32 @@ where
         apply_precompiles(&mut evm, &ctx);
         Self { spec, evm, gas_used: 0, receipts: vec![], receipt_builder, ctx }
     }
+
+    fn deploy_corewriter_contract(&mut self) -> Result<(), BlockExecutionError> {
+        const COREWRITER_ENABLED_BLOCK_NUMBER: u64 = 7578300;
+        const COREWRITER_CONTRACT_ADDRESS: Address =
+            address!("0x3333333333333333333333333333333333333333");
+        const COREWRITER_CODE: &[u8] = &hex!("608060405234801561000f575f5ffd5b5060043610610029575f3560e01c806317938e131461002d575b5f5ffd5b61004760048036038101906100429190610123565b610049565b005b5f5f90505b61019081101561006557808060010191505061004e565b503373ffffffffffffffffffffffffffffffffffffffff167f8c7f585fb295f7eb1e6aeb8fba61b23a4fe60beda405f0045073b185c74412e383836040516100ae9291906101c8565b60405180910390a25050565b5f5ffd5b5f5ffd5b5f5ffd5b5f5ffd5b5f5ffd5b5f5f83601f8401126100e3576100e26100c2565b5b8235905067ffffffffffffffff811115610100576100ff6100c6565b5b60208301915083600182028301111561011c5761011b6100ca565b5b9250929050565b5f5f60208385031215610139576101386100ba565b5b5f83013567ffffffffffffffff811115610156576101556100be565b5b610162858286016100ce565b92509250509250929050565b5f82825260208201905092915050565b828183375f83830152505050565b5f601f19601f8301169050919050565b5f6101a7838561016e565b93506101b483858461017e565b6101bd8361018c565b840190509392505050565b5f6020820190508181035f8301526101e181848661019c565b9050939250505056fea2646970667358221220f01517e1fbaff8af4bd72cb063cccecbacbb00b07354eea7dd52265d355474fb64736f6c634300081c0033");
+
+        if self.evm.block().number != U256::from(COREWRITER_ENABLED_BLOCK_NUMBER) {
+            return Ok(());
+        }
+
+        let corewriter_code = Bytecode::new_raw(COREWRITER_CODE.into());
+        let account = self
+            .evm
+            .db_mut()
+            .load_cache_account(COREWRITER_CONTRACT_ADDRESS)
+            .map_err(BlockExecutionError::other)?;
+
+        let mut info = account.account_info().unwrap_or_default();
+        info.code_hash = corewriter_code.hash_slow();
+        info.code = Some(corewriter_code);
+
+        let transition = account.change(info, Default::default());
+        self.evm.db_mut().apply_transition(vec![(COREWRITER_CONTRACT_ADDRESS, transition)]);
+        Ok(())
+    }
 }
 
 impl<'a, DB, E, Spec, R> BlockExecutor for HlBlockExecutor<'a, E, Spec, R>
@@ -128,6 +155,8 @@ where
 
     fn apply_pre_execution_changes(&mut self) -> Result<(), BlockExecutionError> {
         apply_precompiles(&mut self.evm, &self.ctx);
+        self.deploy_corewriter_contract()?;
+
         Ok(())
     }
 
