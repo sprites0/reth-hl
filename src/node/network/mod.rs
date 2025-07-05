@@ -226,11 +226,18 @@ where
         let network = NetworkManager::builder(network_config).await?;
         let handle = ctx.start_network(network, pool);
         let local_node_record = handle.local_node_record();
+        let chain_spec = ctx.chain_spec();
         info!(target: "reth::cli", enode=%local_node_record, "P2P networking initialized");
 
         ctx.task_executor().spawn_critical("pseudo peer", async move {
             let block_source = block_source_config.create_cached_block_source().await;
-            start_pseudo_peer(local_node_record.to_string(), block_source).await.unwrap();
+            start_pseudo_peer(
+                chain_spec,
+                local_node_record.to_string(),
+                block_source,
+            )
+            .await
+            .unwrap();
         });
 
         Ok(handle)

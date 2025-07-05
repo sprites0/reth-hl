@@ -12,6 +12,8 @@ pub mod service;
 pub mod sources;
 pub mod utils;
 
+use std::sync::Arc;
+
 pub use cli::*;
 pub use config::*;
 pub use error::*;
@@ -35,10 +37,12 @@ pub mod prelude {
     };
 }
 
+use crate::chainspec::HlChainSpec;
 use reth_network::{NetworkEvent, NetworkEventListenerProvider};
 
 /// Main function that starts the network manager and processes eth requests
 pub async fn start_pseudo_peer(
+    chain_spec: Arc<HlChainSpec>,
     destination_peer: String,
     block_source: BlockSourceBoxed,
 ) -> eyre::Result<()> {
@@ -63,7 +67,7 @@ pub async fn start_pseudo_peer(
     let mut network_events = network_handle.event_listener();
     info!("Starting network manager...");
 
-    let mut service = PseudoPeer::new(block_source, blockhash_cache.clone());
+    let mut service = PseudoPeer::new(chain_spec, block_source, blockhash_cache.clone());
     tokio::spawn(network);
     let mut first = true;
 

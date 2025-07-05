@@ -1,7 +1,10 @@
 use super::{sources::BlockSource, utils::LruBiMap};
-use crate::node::{
-    network::{HlNetworkPrimitives, HlNewBlock},
-    types::BlockAndReceipts,
+use crate::{
+    chainspec::HlChainSpec,
+    node::{
+        network::{HlNetworkPrimitives, HlNewBlock},
+        types::BlockAndReceipts,
+    },
 };
 use alloy_eips::HashOrNumber;
 use alloy_primitives::{B256, U128};
@@ -116,6 +119,7 @@ impl BlockImport<HlNewBlock> for BlockPoller {
 
 /// A pseudo peer that can process eth requests and feed blocks to reth
 pub struct PseudoPeer<BS: BlockSource> {
+    chain_spec: Arc<HlChainSpec>,
     block_source: BS,
     blockhash_cache: BlockHashCache,
     warm_cache_size: u64,
@@ -127,8 +131,13 @@ pub struct PseudoPeer<BS: BlockSource> {
 }
 
 impl<BS: BlockSource> PseudoPeer<BS> {
-    pub fn new(block_source: BS, blockhash_cache: BlockHashCache) -> Self {
+    pub fn new(
+        chain_spec: Arc<HlChainSpec>,
+        block_source: BS,
+        blockhash_cache: BlockHashCache,
+    ) -> Self {
         Self {
+            chain_spec,
             block_source,
             blockhash_cache,
             warm_cache_size: 1000, // reth default chunk size for GetBlockBodies
@@ -244,7 +253,8 @@ impl<BS: BlockSource> PseudoPeer<BS> {
         use jsonrpsee_core::client::ClientT;
 
         debug!("Fallback to official RPC: {hash:?}");
-        let client = HttpClientBuilder::default().build("https://rpc.hyperliquid.xyz/evm").unwrap();
+        let client =
+            HttpClientBuilder::default().build(self.chain_spec.official_rpc_url()).unwrap();
         let target_block: Block = client.request("eth_getBlockByHash", (hash, false)).await?;
 
         debug!("From official RPC: {:?} for {hash:?}", target_block.header.number);

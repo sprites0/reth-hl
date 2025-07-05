@@ -137,3 +137,16 @@ impl HlHardforks for Arc<HlChainSpec> {
         self.as_ref().hl_fork_activation(fork)
     }
 }
+
+impl HlChainSpec {
+    pub const MAINNET_RPC_URL: &str = "https://rpc.hyperliquid.xyz/evm";
+    pub const TESTNET_RPC_URL: &str = "https://rpc.hyperliquid-testnet.xyz/evm";
+
+    pub fn official_rpc_url(&self) -> &'static str {
+        match self.inner.chain().id() {
+            999 => Self::MAINNET_RPC_URL,
+            998 => Self::TESTNET_RPC_URL,
+            _ => unreachable!("Unreachable since ChainSpecParser won't return other chains"),
+        }
+    }
+}
