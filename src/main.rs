@@ -2,6 +2,7 @@ use clap::Parser;
 use reth::builder::NodeHandle;
 use reth_hl::{
     chainspec::parser::HlChainSpecParser,
+    hl_node_compliance::install_hl_node_compliance,
     node::{
         cli::{Cli, HlNodeArgs},
         storage::tables::Tables,
@@ -26,10 +27,11 @@ fn main() -> eyre::Result<()> {
 
     Cli::<HlChainSpecParser, HlNodeArgs>::parse().run(|builder, ext| async move {
         builder.builder.database.create_tables_for::<Tables>()?;
-        let (node, engine_handle_tx) = HlNode::new(ext.block_source_args.parse().await?);
+        let (node, engine_handle_tx) =
+            HlNode::new(ext.block_source_args.parse().await?, ext.hl_node_compliant);
         let NodeHandle { node, node_exit_future: exit_future } = builder
             .node(node)
-            .extend_rpc_modules(|ctx| {
+            .extend_rpc_modules(move |ctx| {
                 let upstream_rpc_url = ext.upstream_rpc_url;
                 if let Some(upstream_rpc_url) = upstream_rpc_url {
                     ctx.modules.replace_configured(
@@ -38,6 +40,11 @@ fn main() -> eyre::Result<()> {
 
                     info!("Transaction forwarding enabled");
                 }
+
+                if ext.hl_node_compliant {
+                    install_hl_node_compliance(ctx)?;
+                }
+
                 Ok(())
             })
             .launch()
