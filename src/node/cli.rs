@@ -46,6 +46,12 @@ pub struct HlNodeArgs {
     /// 3. filters out logs and transactions from subscription.
     #[arg(long, env = "HL_NODE_COMPLIANT")]
     pub hl_node_compliant: bool,
+
+    /// Forward eth_call and eth_estimateGas to the upstream RPC.
+    ///
+    /// This is useful when read precompile is needed for gas estimation.
+    #[arg(long, env = "FORWARD_CALL")]
+    pub forward_call: bool,
 }
 
 /// The main reth_hl cli interface.

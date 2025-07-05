@@ -1,6 +1,7 @@
 use clap::Parser;
 use reth::builder::NodeHandle;
 use reth_hl::{
+    call_forwarder::{self, CallForwarderApiServer},
     chainspec::parser::HlChainSpecParser,
     hl_node_compliance::install_hl_node_compliance,
     node::{
@@ -41,6 +42,13 @@ fn main() -> eyre::Result<()> {
                     tx_forwarder::EthForwarderExt::new(upstream_rpc_url.clone()).into_rpc(),
                 )?;
                 info!("Transaction will be forwarded to {}", upstream_rpc_url);
+
+                if ext.forward_call {
+                    ctx.modules.replace_configured(
+                        call_forwarder::CallForwarderExt::new(upstream_rpc_url.clone()).into_rpc(),
+                    )?;
+                    info!("Call/gas estimation will be forwarded to {}", upstream_rpc_url);
+                }
 
                 if ext.hl_node_compliant {
                     install_hl_node_compliance(ctx)?;
