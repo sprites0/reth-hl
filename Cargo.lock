@@ -9280,6 +9280,7 @@ dependencies = [
  "alloy-evm",
  "alloy-genesis",
  "alloy-json-abi",
+ "alloy-json-rpc",
  "alloy-network",
  "alloy-primitives",
  "alloy-rlp",

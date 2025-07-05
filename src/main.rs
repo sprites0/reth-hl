@@ -1,6 +1,7 @@
 use clap::Parser;
 use reth::builder::NodeHandle;
 use reth_hl::{
+    call_forwarder::{self, CallForwarderApiServer},
     chainspec::parser::HlChainSpecParser,
     hl_node_compliance::install_hl_node_compliance,
     node::{
@@ -26,23 +27,32 @@ fn main() -> eyre::Result<()> {
     }
 
     Cli::<HlChainSpecParser, HlNodeArgs>::parse().run(|builder, ext| async move {
+        let default_upstream_rpc_url = builder.config().chain.official_rpc_url();
         builder.builder.database.create_tables_for::<Tables>()?;
+
         let (node, engine_handle_tx) =
             HlNode::new(ext.block_source_args.parse().await?, ext.hl_node_compliant);
         let NodeHandle { node, node_exit_future: exit_future } = builder
             .node(node)
             .extend_rpc_modules(move |ctx| {
-                let upstream_rpc_url = ext.upstream_rpc_url;
-                if let Some(upstream_rpc_url) = upstream_rpc_url {
-                    ctx.modules.replace_configured(
-                        tx_forwarder::EthForwarderExt::new(upstream_rpc_url.clone()).into_rpc(),
-                    )?;
+                let upstream_rpc_url =
+                    ext.upstream_rpc_url.unwrap_or_else(|| default_upstream_rpc_url.to_owned());
 
-                    info!("Transaction forwarding enabled");
+                ctx.modules.replace_configured(
+                    tx_forwarder::EthForwarderExt::new(upstream_rpc_url.clone()).into_rpc(),
+                )?;
+                info!("Transaction will be forwarded to {}", upstream_rpc_url);
+
+                if ext.forward_call {
+                    ctx.modules.replace_configured(
+                        call_forwarder::CallForwarderExt::new(upstream_rpc_url.clone()).into_rpc(),
+                    )?;
+                    info!("Call/gas estimation will be forwarded to {}", upstream_rpc_url);
                 }
 
                 if ext.hl_node_compliant {
                     install_hl_node_compliance(ctx)?;
+                    info!("hl-node compliant mode enabled");
                 }
 
                 Ok(())

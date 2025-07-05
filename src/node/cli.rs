@@ -33,6 +33,8 @@ pub struct HlNodeArgs {
     pub block_source_args: BlockSourceArgs,
 
     /// Upstream RPC URL to forward incoming transactions.
+    ///
+    /// Default to Hyperliquid's RPC URL when not provided (https://rpc.hyperliquid.xyz/evm).
     #[arg(long, env = "UPSTREAM_RPC_URL")]
     pub upstream_rpc_url: Option<String>,
 
@@ -44,6 +46,12 @@ pub struct HlNodeArgs {
     /// 3. filters out logs and transactions from subscription.
     #[arg(long, env = "HL_NODE_COMPLIANT")]
     pub hl_node_compliant: bool,
+
+    /// Forward eth_call and eth_estimateGas to the upstream RPC.
+    ///
+    /// This is useful when read precompile is needed for gas estimation.
+    #[arg(long, env = "FORWARD_CALL")]
+    pub forward_call: bool,
 }
 
 /// The main reth_hl cli interface.
