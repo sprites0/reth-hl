@@ -57,6 +57,7 @@ alloy-chains = "0.2.0"
 alloy-eips = "1.0.13"
 alloy-evm = "0.12"
 alloy-json-abi = { version = "1.0.0", default-features = false }
+alloy-json-rpc = { version = "1.0.13", default-features = false }
 alloy-dyn-abi = "1.2.0"
 alloy-network = "1.0.13"
 alloy-primitives = { version = "1.2.0", default-features = false, features = ["map-foldhash"] }
