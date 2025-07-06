@@ -33,7 +33,7 @@ reth-hl node --http --http.addr 0.0.0.0 --http.api eth,ots,net,web3 \
 
 ## How to run (mainnet) (with local block sync)
 
-The `--s3` method above fetches blocks from S3, but you can instead source them from your local hl-node.
+The `--s3` method above fetches blocks from S3, but you can instead source them from your local hl-node using `--ingest-dir` and `--local-ingest-dir`.
 
 This will require you to first have a hl-node outputting blocks prior to running the initial s3 sync,
 the node will prioritise locally produced blocks with a fallback to s3.
