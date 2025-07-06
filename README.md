@@ -26,7 +26,9 @@ Building nanoreth from source requires Rust and Cargo to be installed:
 3) Start nanoreth which will begin syncing using the blocks in `~/evm-blocks`:
 
 ```sh
-$ reth-hl node --http --http.addr 0.0.0.0 --http.api eth,ots,net,web3 --ws --ws.addr 0.0.0.0 --ws.origins '*' --ws.api eth,ots,net,web3 --s3 --ws.port 8545
+reth-hl node --http --http.addr 0.0.0.0 --http.api eth,ots,net,web3 \
+  --ws --ws.addr 0.0.0.0 --ws.origins '*' --ws.api eth,ots,net,web3 \
+  --ws.port 8545 --http.port 8545 --s3
 ```
 
 ## How to run (mainnet) (with local block sync)
