@@ -11,6 +11,19 @@ path = "src/lib.rs"
 name = "reth-hl"
 path = "src/main.rs"
 
+[profile.release]
+opt-level = 3
+lto = "thin"
+debug = "none"
+strip = "symbols"
+panic = "unwind"
+codegen-units = 16
+
+[profile.maxperf]
+inherits = "release"
+lto = "fat"
+codegen-units = 1
+
 [dependencies]
 reth = { git = "https://github.com/sprites0/reth", rev = "fc754e5983f055365325dc9a04632d5ba2c4a8bc" }
 reth-cli = { git = "https://github.com/sprites0/reth", rev = "fc754e5983f055365325dc9a04632d5ba2c4a8bc" }
