@@ -108,6 +108,13 @@ libc = "0.2"
 [features]
 default = ["jemalloc"]
 jemalloc = ["dep:tikv-jemallocator"]
+asm-keccak = [
+    "reth-node-core/asm-keccak",
+    "reth-primitives/asm-keccak",
+]
+min-debug-logs = [
+    "tracing/release_max_level_debug",
+]
 dev = [
     "reth-cli-commands/arbitrary",
     "reth/dev",
