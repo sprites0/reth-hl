@@ -1,6 +1,10 @@
 use alloy_eips::BlockId;
 use alloy_primitives::{Bytes, U256};
-use alloy_rpc_types_eth::{state::StateOverride, transaction::TransactionRequest, BlockOverrides};
+use alloy_rpc_types_eth::{
+    state::{EvmOverrides, StateOverride},
+    transaction::TransactionRequest,
+    BlockOverrides,
+};
 use jsonrpsee::{
     http_client::{HttpClient, HttpClientBuilder},
     proc_macros::rpc,
@@ -8,6 +12,7 @@ use jsonrpsee::{
     types::{error::INTERNAL_ERROR_CODE, ErrorObject},
 };
 use jsonrpsee_core::{async_trait, client::ClientT, ClientError, RpcResult};
+use reth_rpc_eth_api::helpers::EthCall;
 
 #[rpc(server, namespace = "eth")]
 pub(crate) trait CallForwarderApi {
@@ -32,21 +37,25 @@ pub(crate) trait CallForwarderApi {
     ) -> RpcResult<U256>;
 }
 
-pub struct CallForwarderExt {
-    client: HttpClient,
+pub struct CallForwarderExt<EthApi> {
+    upstream_client: HttpClient,
+    eth_api: EthApi,
 }
 
-impl CallForwarderExt {
-    pub fn new(upstream_rpc_url: String) -> Self {
-        let client =
+impl<EthApi> CallForwarderExt<EthApi> {
+    pub fn new(upstream_rpc_url: String, eth_api: EthApi) -> Self {
+        let upstream_client =
             HttpClientBuilder::default().build(upstream_rpc_url).expect("Failed to build client");
 
-        Self { client }
+        Self { upstream_client, eth_api }
     }
 }
 
 #[async_trait]
-impl CallForwarderApiServer for CallForwarderExt {
+impl<EthApi> CallForwarderApiServer for CallForwarderExt<EthApi>
+where
+    EthApi: EthCall + Send + Sync + 'static,
+{
     async fn call(
         &self,
         request: TransactionRequest,
@@ -54,22 +63,35 @@ impl CallForwarderApiServer for CallForwarderExt {
         state_overrides: Option<StateOverride>,
         block_overrides: Option<Box<BlockOverrides>>,
     ) -> RpcResult<Bytes> {
-        let result = self
-            .client
-            .clone()
-            .request(
-                "eth_call",
-                rpc_params![request, block_number, state_overrides, block_overrides],
+        let is_latest = block_number.as_ref().map(|b| b.is_latest()).unwrap_or(true);
+        let result = if is_latest {
+            self.upstream_client
+                .request(
+                    "eth_call",
+                    rpc_params![request, block_number, state_overrides, block_overrides],
+                )
+                .await
+                .map_err(|e| match e {
+                    ClientError::Call(e) => e,
+                    _ => ErrorObject::owned(
+                        INTERNAL_ERROR_CODE,
+                        format!("Failed to call: {e:?}"),
+                        Some(()),
+                    ),
+                })?
+        } else {
+            EthCall::call(
+                &self.eth_api,
+                request,
+                block_number,
+                EvmOverrides::new(state_overrides, block_overrides),
             )
             .await
-            .map_err(|e| match e {
-                ClientError::Call(e) => e,
-                _ => ErrorObject::owned(
-                    INTERNAL_ERROR_CODE,
-                    format!("Failed to call: {e:?}"),
-                    Some(()),
-                ),
-            })?;
+            .map_err(|e| {
+                ErrorObject::owned(INTERNAL_ERROR_CODE, format!("Failed to call: {e:?}"), Some(()))
+            })?
+        };
+
         Ok(result)
     }
 
@@ -79,19 +101,36 @@ impl CallForwarderApiServer for CallForwarderExt {
         block_number: Option<BlockId>,
         state_override: Option<StateOverride>,
     ) -> RpcResult<U256> {
-        let result = self
-            .client
-            .clone()
-            .request("eth_estimateGas", rpc_params![request, block_number, state_override])
+        let is_latest = block_number.as_ref().map(|b| b.is_latest()).unwrap_or(true);
+        let result = if is_latest {
+            self.upstream_client
+                .request("eth_estimateGas", rpc_params![request, block_number, state_override])
+                .await
+                .map_err(|e| match e {
+                    ClientError::Call(e) => e,
+                    _ => ErrorObject::owned(
+                        INTERNAL_ERROR_CODE,
+                        format!("Failed to estimate gas: {e:?}"),
+                        Some(()),
+                    ),
+                })?
+        } else {
+            EthCall::estimate_gas_at(
+                &self.eth_api,
+                request,
+                block_number.unwrap_or_default(),
+                state_override,
+            )
             .await
-            .map_err(|e| match e {
-                ClientError::Call(e) => e,
-                _ => ErrorObject::owned(
+            .map_err(|e| {
+                ErrorObject::owned(
                     INTERNAL_ERROR_CODE,
                     format!("Failed to estimate gas: {e:?}"),
                     Some(()),
-                ),
-            })?;
+                )
+            })?
+        };
+
         Ok(result)
     }
 }
