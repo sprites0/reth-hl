@@ -45,7 +45,11 @@ fn main() -> eyre::Result<()> {
 
                 if ext.forward_call {
                     ctx.modules.replace_configured(
-                        call_forwarder::CallForwarderExt::new(upstream_rpc_url.clone()).into_rpc(),
+                        call_forwarder::CallForwarderExt::new(
+                            upstream_rpc_url.clone(),
+                            ctx.registry.eth_api().clone(),
+                        )
+                        .into_rpc(),
                     )?;
                     info!("Call/gas estimation will be forwarded to {}", upstream_rpc_url);
                 }
