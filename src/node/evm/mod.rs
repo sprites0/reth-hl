@@ -110,8 +110,10 @@ where
         _contract: Address,
         _data: Bytes,
     ) -> Result<ResultAndState<Self::HaltReason>, Self::Error> {
-        // NOTE: (HACK) Per hyper-evm-sync, HyperEVM doesn't seem to call this method, so we just return a success result with no changes
-        // This is used for block traces. In a long term, consider implementing SystemCaller.
+        // NOTE: This is used for block traces.
+        // Per hyper-evm-sync, HyperEVM doesn't seem to call this method, so
+        // - we just return a success result with no changes, which gives the same semantics as HyperEVM.
+        // - In a long term (ideally), consider implementing SystemCaller.
         Ok(ResultAndState::new(
             ExecutionResult::Success {
                 reason: SuccessReason::Stop,
