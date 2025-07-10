@@ -15,11 +15,12 @@ use reth::{
 use reth_evm::{Evm, EvmEnv};
 use revm::{
     context::{
-        result::{EVMError, HaltReason, ResultAndState},
+        result::{EVMError, ExecutionResult, HaltReason, Output, ResultAndState, SuccessReason},
         BlockEnv, TxEnv,
     },
     handler::{instructions::EthInstructions, EthPrecompiles, PrecompileProvider},
     interpreter::{interpreter::EthInterpreter, InterpreterResult},
+    state::EvmState,
     Context, Database, ExecuteEvm, InspectEvm, Inspector,
 };
 use std::ops::{Deref, DerefMut};
@@ -109,7 +110,18 @@ where
         _contract: Address,
         _data: Bytes,
     ) -> Result<ResultAndState<Self::HaltReason>, Self::Error> {
-        unimplemented!()
+        // NOTE: (HACK) Per hyper-evm-sync, HyperEVM doesn't seem to call this method, so we just return a success result with no changes
+        // This is used for block traces. In a long term, consider implementing SystemCaller.
+        Ok(ResultAndState::new(
+            ExecutionResult::Success {
+                reason: SuccessReason::Stop,
+                gas_used: 0,
+                gas_refunded: 0,
+                logs: vec![],
+                output: Output::Call(Bytes::new()),
+            },
+            EvmState::default(),
+        ))
     }
 
     fn db_mut(&mut self) -> &mut Self::DB {
