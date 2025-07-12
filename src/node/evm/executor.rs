@@ -10,7 +10,7 @@ use crate::{
 use alloy_consensus::{Transaction, TxReceipt};
 use alloy_eips::{eip7685::Requests, Encodable2718};
 use alloy_evm::{block::ExecutableTx, eth::receipt_builder::ReceiptBuilderCtx};
-use alloy_primitives::{address, hex, Address, Bytes, U256};
+use alloy_primitives::{address, hex, Address, Bytes, U160, U256};
 use reth_chainspec::{EthChainSpec, EthereumHardforks, Hardforks};
 use reth_evm::{
     block::{BlockValidationError, CommitChanges},
@@ -244,6 +244,7 @@ where
     EVM: Evm<DB = &'a mut State<DB>, Precompiles = PrecompilesMap>,
     DB: Database + 'a,
 {
+    let block_number = evm.block().number;
     let precompiles_mut = evm.precompiles_mut();
     // For all precompile addresses just in case it's populated and not cleared
     // Clear 0x00...08xx addresses
@@ -260,5 +261,23 @@ where
                 run_precompile(&precompile, input.data, input.gas)
             }))
         });
+    }
+
+    // NOTE: Hotfix for the precompile issue (#17). Remove this once the issue is fixed.
+    if block_number >= U256::from(7000000) {
+        fill_all_precompiles(ctx, precompiles_mut);
+    }
+}
+
+fn fill_all_precompiles<'a>(ctx: &HlBlockExecutionCtx<'a>, precompiles_mut: &mut PrecompilesMap) {
+    for address in 0x800..=0x80D {
+        let address = Address::from(U160::from(address));
+        if !ctx.read_precompile_calls.contains_key(&address) {
+            precompiles_mut.apply_precompile(&address, |_| {
+                Some(DynPrecompile::from(move |_: PrecompileInput| -> PrecompileResult {
+                    Err(PrecompileError::OutOfGas)
+                }))
+            });
+        }
     }
 }
