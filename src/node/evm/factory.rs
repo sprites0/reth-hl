@@ -14,8 +14,8 @@ use revm::{
         result::{EVMError, HaltReason},
         TxEnv,
     },
-    handler::EthPrecompiles,
     inspector::NoOpInspector,
+    precompile::{PrecompileSpecId, Precompiles},
     Inspector,
 };
 
@@ -38,15 +38,14 @@ impl EvmFactory for HlEvmFactory {
         db: DB,
         input: EvmEnv<HlSpecId>,
     ) -> Self::Evm<DB, NoOpInspector> {
+        let spec_id = *input.spec_id();
         HlEvm {
             inner: Context::hl()
                 .with_block(input.block_env)
                 .with_cfg(input.cfg_env)
                 .with_db(db)
                 .build_hl_with_inspector(NoOpInspector {})
-                .with_precompiles(PrecompilesMap::from_static(
-                    EthPrecompiles::default().precompiles,
-                )),
+                .with_precompiles(hl_precompiles(spec_id)),
             inspect: false,
         }
     }
@@ -60,16 +59,20 @@ impl EvmFactory for HlEvmFactory {
         input: EvmEnv<HlSpecId>,
         inspector: I,
     ) -> Self::Evm<DB, I> {
+        let spec_id = *input.spec_id();
         HlEvm {
             inner: Context::hl()
                 .with_block(input.block_env)
                 .with_cfg(input.cfg_env)
                 .with_db(db)
                 .build_hl_with_inspector(inspector)
-                .with_precompiles(PrecompilesMap::from_static(
-                    EthPrecompiles::default().precompiles,
-                )),
+                .with_precompiles(hl_precompiles(spec_id)),
             inspect: true,
         }
     }
+}
+
+fn hl_precompiles(spec_id: HlSpecId) -> PrecompilesMap {
+    let spec = PrecompileSpecId::from_spec_id(spec_id.into());
+    PrecompilesMap::from_static(Precompiles::new(spec))
 }
