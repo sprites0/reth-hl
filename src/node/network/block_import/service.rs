@@ -401,6 +401,7 @@ mod tests {
                 },
                 sidecars: None,
                 read_precompile_calls: None,
+                highest_precompile_address: None,
             },
         };
         let new_block = HlNewBlock(NewBlock { block, td: U128::from(1) });

@@ -42,7 +42,7 @@ mod rlp {
         HlBlockBody,
     };
     use alloy_consensus::{BlobTransactionSidecar, Header};
-    use alloy_primitives::U128;
+    use alloy_primitives::{Address, U128};
     use alloy_rlp::{RlpDecodable, RlpEncodable};
     use alloy_rpc_types::Withdrawals;
     use std::borrow::Cow;
@@ -63,6 +63,7 @@ mod rlp {
         td: U128,
         sidecars: Option<Cow<'a, Vec<BlobTransactionSidecar>>>,
         read_precompile_calls: Option<Cow<'a, ReadPrecompileCalls>>,
+        highest_precompile_address: Option<Cow<'a, Address>>,
     }
 
     impl<'a> From<&'a HlNewBlock> for HlNewBlockHelper<'a> {
@@ -76,6 +77,7 @@ mod rlp {
                                 inner: BlockBody { transactions, ommers, withdrawals },
                                 sidecars,
                                 read_precompile_calls,
+                                highest_precompile_address,
                             },
                     },
                 td,
@@ -91,6 +93,7 @@ mod rlp {
                 td: *td,
                 sidecars: sidecars.as_ref().map(Cow::Borrowed),
                 read_precompile_calls: read_precompile_calls.as_ref().map(Cow::Borrowed),
+                highest_precompile_address: highest_precompile_address.as_ref().map(Cow::Borrowed),
             }
         }
     }
@@ -112,6 +115,7 @@ mod rlp {
                 td,
                 sidecars,
                 read_precompile_calls,
+                highest_precompile_address,
             } = HlNewBlockHelper::decode(buf)?;
 
             Ok(HlNewBlock(NewBlock {
@@ -125,6 +129,8 @@ mod rlp {
                         },
                         sidecars: sidecars.map(|s| s.into_owned()),
                         read_precompile_calls: read_precompile_calls.map(|s| s.into_owned()),
+                        highest_precompile_address: highest_precompile_address
+                            .map(|s| s.into_owned()),
                     },
                 },
                 td,
@@ -231,13 +237,9 @@ where
 
         ctx.task_executor().spawn_critical("pseudo peer", async move {
             let block_source = block_source_config.create_cached_block_source().await;
-            start_pseudo_peer(
-                chain_spec,
-                local_node_record.to_string(),
-                block_source,
-            )
-            .await
-            .unwrap();
+            start_pseudo_peer(chain_spec, local_node_record.to_string(), block_source)
+                .await
+                .unwrap();
         });
 
         Ok(handle)

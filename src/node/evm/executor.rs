@@ -26,6 +26,7 @@ use revm::{
         result::{ExecutionResult, ResultAndState},
         TxEnv,
     },
+    interpreter::instructions::utility::IntoU256,
     precompile::{PrecompileError, PrecompileOutput, PrecompileResult},
     primitives::HashMap,
     state::Bytecode,
@@ -254,30 +255,43 @@ where
             precompiles_mut.apply_precompile(&address, |_| None);
         }
     }
-    for (address, precompile) in ctx.read_precompile_calls.iter() {
+    for (address, precompile) in
+        ctx.extras.read_precompile_calls.clone().unwrap_or_default().0.iter()
+    {
         let precompile = precompile.clone();
         precompiles_mut.apply_precompile(address, |_| {
+            let precompiles_map: HashMap<ReadPrecompileInput, ReadPrecompileResult> =
+                precompile.iter().map(|(input, result)| (input.clone(), result.clone())).collect();
             Some(DynPrecompile::from(move |input: PrecompileInput| -> PrecompileResult {
-                run_precompile(&precompile, input.data, input.gas)
+                run_precompile(&precompiles_map, input.data, input.gas)
             }))
         });
     }
 
-    // NOTE: Hotfix for the precompile issue (#17). Remove this once the issue is fixed.
-    if block_number >= U256::from(7000000) {
+    // NOTE: This is adapted from hyperliquid-dex/hyper-evm-sync#5
+    const WARM_PRECOMPILES_BLOCK_NUMBER: u64 = 8_197_684;
+    if block_number >= U256::from(WARM_PRECOMPILES_BLOCK_NUMBER) {
         fill_all_precompiles(ctx, precompiles_mut);
     }
 }
 
+fn address_to_u64(address: Address) -> u64 {
+    address.into_u256().try_into().unwrap()
+}
+
 fn fill_all_precompiles<'a>(ctx: &HlBlockExecutionCtx<'a>, precompiles_mut: &mut PrecompilesMap) {
-    for address in 0x800..=0x80D {
+    let lowest_address = 0x800;
+    let highest_address = ctx.extras.highest_precompile_address.map_or(0x80D, address_to_u64);
+    for address in lowest_address..=highest_address {
         let address = Address::from(U160::from(address));
-        if !ctx.read_precompile_calls.contains_key(&address) {
-            precompiles_mut.apply_precompile(&address, |_| {
-                Some(DynPrecompile::from(move |_: PrecompileInput| -> PrecompileResult {
-                    Err(PrecompileError::OutOfGas)
-                }))
-            });
-        }
+        precompiles_mut.apply_precompile(&address, |f| {
+            if let Some(precompile) = f {
+                return Some(precompile);
+            }
+
+            Some(DynPrecompile::from(move |_: PrecompileInput| -> PrecompileResult {
+                Err(PrecompileError::OutOfGas)
+            }))
+        });
     }
 }

@@ -160,6 +160,7 @@ where
                 },
                 sidecars: None,
                 read_precompile_calls: None,
+                highest_precompile_address: None,
             },
         }
     }

@@ -5,7 +5,6 @@
 use alloy_primitives::{Address, Bytes, Log, B256};
 use alloy_rlp::{Decodable, Encodable, RlpDecodable, RlpEncodable};
 use bytes::BufMut;
-use revm::primitives::HashMap;
 use serde::{Deserialize, Serialize};
 
 use crate::{node::spot_meta::MAINNET_CHAIN_ID, HlBlock};
@@ -14,24 +13,13 @@ pub type ReadPrecompileCall = (Address, Vec<(ReadPrecompileInput, ReadPrecompile
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, Default)]
 pub struct ReadPrecompileCalls(pub Vec<ReadPrecompileCall>);
-pub type ReadPrecompileMap = HashMap<Address, HashMap<ReadPrecompileInput, ReadPrecompileResult>>;
 
 mod reth_compat;
 
-impl From<ReadPrecompileCalls> for ReadPrecompileMap {
-    fn from(calls: ReadPrecompileCalls) -> Self {
-        calls.0.into_iter().map(|(address, calls)| (address, calls.into_iter().collect())).collect()
-    }
-}
-
-impl From<ReadPrecompileMap> for ReadPrecompileCalls {
-    fn from(map: ReadPrecompileMap) -> Self {
-        Self(
-            map.into_iter()
-                .map(|(address, calls)| (address, calls.into_iter().collect()))
-                .collect(),
-        )
-    }
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct HlExtras {
+    pub read_precompile_calls: Option<ReadPrecompileCalls>,
+    pub highest_precompile_address: Option<Address>,
 }
 
 impl Encodable for ReadPrecompileCalls {
@@ -58,6 +46,7 @@ pub struct BlockAndReceipts {
     pub system_txs: Vec<SystemTx>,
     #[serde(default)]
     pub read_precompile_calls: ReadPrecompileCalls,
+    pub highest_precompile_address: Option<Address>,
 }
 
 impl BlockAndReceipts {
@@ -65,6 +54,7 @@ impl BlockAndReceipts {
         let EvmBlock::Reth115(block) = self.block;
         block.to_reth_block(
             self.read_precompile_calls.clone(),
+            self.highest_precompile_address,
             self.system_txs.clone(),
             MAINNET_CHAIN_ID,
         )
