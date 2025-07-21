@@ -112,7 +112,8 @@ where
     ) -> Result<ResultAndState<Self::HaltReason>, Self::Error> {
         // NOTE: This is used for block traces.
         // Per hyper-evm-sync, HyperEVM doesn't seem to call this method, so
-        // - we just return a success result with no changes, which gives the same semantics as HyperEVM.
+        // - we just return a success result with no changes, which gives the same semantics as
+        //   HyperEVM.
         // - In a long term (ideally), consider implementing SystemCaller.
         Ok(ResultAndState::new(
             ExecutionResult::Success {

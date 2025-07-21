@@ -1,7 +1,7 @@
 use crate::{
     node::{
         primitives::tx_wrapper::{convert_to_eth_block_body, convert_to_hl_block_body},
-        types::ReadPrecompileCalls,
+        types::HlExtras,
     },
     HlBlock, HlBlockBody, HlPrimitives,
 };
@@ -29,23 +29,20 @@ impl HlStorage {
     fn write_precompile_calls<Provider>(
         &self,
         provider: &Provider,
-        inputs: Vec<(u64, Option<ReadPrecompileCalls>)>,
+        inputs: Vec<(u64, HlExtras)>,
     ) -> ProviderResult<()>
     where
         Provider: DBProvider<Tx: DbTxMut>,
     {
-        let mut precompile_calls_cursor =
-            provider.tx_ref().cursor_write::<tables::BlockReadPrecompileCalls>()?;
+        let mut precompile_calls_cursor: <<Provider as DBProvider>::Tx as DbTxMut>::CursorMut<
+            tables::BlockReadPrecompileCalls,
+        > = provider.tx_ref().cursor_write::<tables::BlockReadPrecompileCalls>()?;
 
-        for (block_number, read_precompile_calls) in inputs {
-            let Some(read_precompile_calls) = read_precompile_calls else {
-                continue;
-            };
+        for (block_number, extras) in inputs {
             precompile_calls_cursor.append(
                 block_number,
                 &Bytes::copy_from_slice(
-                    &rmp_serde::to_vec(&read_precompile_calls)
-                        .expect("Failed to serialize read precompile calls"),
+                    &rmp_serde::to_vec(&extras).expect("Failed to serialize read precompile calls"),
                 ),
             )?;
         }
@@ -57,11 +54,11 @@ impl HlStorage {
         &self,
         provider: &Provider,
         inputs: &[ReadBodyInput<'_, HlBlock>],
-    ) -> ProviderResult<Vec<Option<ReadPrecompileCalls>>>
+    ) -> ProviderResult<Vec<HlExtras>>
     where
         Provider: DBProvider<Tx: DbTx>,
     {
-        let mut read_precompile_calls = Vec::with_capacity(inputs.len());
+        let mut extras: Vec<HlExtras> = Vec::with_capacity(inputs.len());
         let mut precompile_calls_cursor =
             provider.tx_ref().cursor_read::<tables::BlockReadPrecompileCalls>()?;
 
@@ -69,11 +66,12 @@ impl HlStorage {
             let precompile_calls = precompile_calls_cursor
                 .seek_exact(header.number())?
                 .map(|(_, calls)| calls)
-                .map(|calls| rmp_serde::from_slice(&calls).unwrap());
-            read_precompile_calls.push(precompile_calls);
+                .map(|calls| rmp_serde::from_slice(&calls).unwrap())
+                .unwrap_or_default();
+            extras.push(precompile_calls);
         }
 
-        Ok(read_precompile_calls)
+        Ok(extras)
     }
 }
 
@@ -92,13 +90,27 @@ where
 
         for (block_number, body) in bodies {
             match body {
-                Some(HlBlockBody { inner, sidecars: _, read_precompile_calls: rpc }) => {
+                Some(HlBlockBody {
+                    inner,
+                    sidecars: _,
+                    read_precompile_calls: rpc,
+                    highest_precompile_address,
+                }) => {
                     eth_bodies.push((block_number, Some(convert_to_eth_block_body(inner))));
-                    read_precompile_calls.push((block_number, rpc));
+                    read_precompile_calls.push((
+                        block_number,
+                        HlExtras { read_precompile_calls: rpc, highest_precompile_address },
+                    ));
                 }
                 None => {
                     eth_bodies.push((block_number, None));
-                    read_precompile_calls.push((block_number, None));
+                    read_precompile_calls.push((
+                        block_number,
+                        HlExtras {
+                            read_precompile_calls: Default::default(),
+                            highest_precompile_address: None,
+                        },
+                    ));
                 }
             }
         }
@@ -148,10 +160,11 @@ where
         Ok(eth_bodies
             .into_iter()
             .zip(read_precompile_calls)
-            .map(|(inner, read_precompile_calls)| HlBlockBody {
+            .map(|(inner, extra)| HlBlockBody {
                 inner: convert_to_hl_block_body(inner),
                 sidecars: None,
-                read_precompile_calls,
+                read_precompile_calls: extra.read_precompile_calls,
+                highest_precompile_address: extra.highest_precompile_address,
             })
             .collect())
     }

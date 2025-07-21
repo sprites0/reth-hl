@@ -112,6 +112,7 @@ impl SealedBlock {
     pub fn to_reth_block(
         &self,
         read_precompile_calls: ReadPrecompileCalls,
+        highest_precompile_address: Option<Address>,
         system_txs: Vec<super::SystemTx>,
         chain_id: u64,
     ) -> HlBlock {
@@ -126,6 +127,7 @@ impl SealedBlock {
             },
             sidecars: None,
             read_precompile_calls: Some(read_precompile_calls),
+            highest_precompile_address,
         };
 
         HlBlock { header: self.header.header.clone(), body: block_body }

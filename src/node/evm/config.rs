@@ -6,7 +6,7 @@ use crate::{
     node::{
         evm::{executor::is_system_transaction, receipt_builder::RethReceiptBuilder},
         primitives::{BlockBody, TransactionSigned},
-        types::ReadPrecompileMap,
+        types::HlExtras,
     },
     HlBlock, HlBlockBody, HlPrimitives,
 };
@@ -137,7 +137,8 @@ where
             body: HlBlockBody {
                 inner: BlockBody { transactions, ommers: Default::default(), withdrawals },
                 sidecars: None,
-                read_precompile_calls: Some(ctx.read_precompile_calls.clone().into()),
+                read_precompile_calls: ctx.extras.read_precompile_calls.clone(),
+                highest_precompile_address: ctx.extras.highest_precompile_address,
             },
         })
     }
@@ -226,7 +227,7 @@ impl<R, Spec, EvmFactory> HlBlockExecutorFactory<R, Spec, EvmFactory> {
 #[derive(Debug, Clone)]
 pub struct HlBlockExecutionCtx<'a> {
     ctx: EthBlockExecutionCtx<'a>,
-    pub read_precompile_calls: ReadPrecompileMap,
+    pub extras: HlExtras,
 }
 
 impl<R, Spec, EvmF> BlockExecutorFactory for HlBlockExecutorFactory<R, Spec, EvmF>
@@ -372,6 +373,11 @@ where
         &self,
         block: &'a SealedBlock<BlockTy<Self::Primitives>>,
     ) -> ExecutionCtxFor<'a, Self> {
+        let block_body = block.body();
+        let extras = HlExtras {
+            read_precompile_calls: block_body.read_precompile_calls.clone(),
+            highest_precompile_address: block_body.highest_precompile_address,
+        };
         HlBlockExecutionCtx {
             ctx: EthBlockExecutionCtx {
                 parent_hash: block.header().parent_hash,
@@ -379,11 +385,7 @@ where
                 ommers: &block.body().ommers,
                 withdrawals: block.body().withdrawals.as_ref().map(Cow::Borrowed),
             },
-            read_precompile_calls: block
-                .body()
-                .read_precompile_calls
-                .clone()
-                .map_or(ReadPrecompileMap::default(), |calls| calls.into()),
+            extras,
         }
     }
 
@@ -400,7 +402,7 @@ where
                 withdrawals: attributes.withdrawals.map(Cow::Owned),
             },
             // TODO: hacky, double check if this is correct
-            read_precompile_calls: ReadPrecompileMap::default(),
+            extras: HlExtras::default(),
         }
     }
 }

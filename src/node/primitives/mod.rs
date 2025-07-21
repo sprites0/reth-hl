@@ -1,5 +1,6 @@
 #![allow(clippy::owned_cow)]
 use alloy_consensus::{BlobTransactionSidecar, Header};
+use alloy_primitives::Address;
 use alloy_rlp::{Encodable, RlpDecodable, RlpEncodable};
 use reth_ethereum_primitives::Receipt;
 use reth_primitives::NodePrimitives;
@@ -45,6 +46,7 @@ pub struct HlBlockBody {
     pub inner: BlockBody,
     pub sidecars: Option<Vec<BlobTransactionSidecar>>,
     pub read_precompile_calls: Option<ReadPrecompileCalls>,
+    pub highest_precompile_address: Option<Address>,
 }
 
 impl InMemorySize for HlBlockBody {
@@ -135,6 +137,7 @@ impl Block for HlBlock {
             withdrawals: body.inner.withdrawals.as_ref().map(Cow::Borrowed),
             sidecars: body.sidecars.as_ref().map(Cow::Borrowed),
             read_precompile_calls: body.read_precompile_calls.as_ref().map(Cow::Borrowed),
+            highest_precompile_address: body.highest_precompile_address.as_ref().map(Cow::Borrowed),
         }
         .length()
     }
@@ -153,6 +156,7 @@ mod rlp {
         withdrawals: Option<Cow<'a, Withdrawals>>,
         sidecars: Option<Cow<'a, Vec<BlobTransactionSidecar>>>,
         read_precompile_calls: Option<Cow<'a, ReadPrecompileCalls>>,
+        highest_precompile_address: Option<Cow<'a, Address>>,
     }
 
     #[derive(RlpEncodable, RlpDecodable)]
@@ -164,6 +168,7 @@ mod rlp {
         pub(crate) withdrawals: Option<Cow<'a, Withdrawals>>,
         pub(crate) sidecars: Option<Cow<'a, Vec<BlobTransactionSidecar>>>,
         pub(crate) read_precompile_calls: Option<Cow<'a, ReadPrecompileCalls>>,
+        pub(crate) highest_precompile_address: Option<Cow<'a, Address>>,
     }
 
     impl<'a> From<&'a HlBlockBody> for BlockBodyHelper<'a> {
@@ -172,6 +177,7 @@ mod rlp {
                 inner: BlockBody { transactions, ommers, withdrawals },
                 sidecars,
                 read_precompile_calls,
+                highest_precompile_address,
             } = value;
 
             Self {
@@ -180,6 +186,7 @@ mod rlp {
                 withdrawals: withdrawals.as_ref().map(Cow::Borrowed),
                 sidecars: sidecars.as_ref().map(Cow::Borrowed),
                 read_precompile_calls: read_precompile_calls.as_ref().map(Cow::Borrowed),
+                highest_precompile_address: highest_precompile_address.as_ref().map(Cow::Borrowed),
             }
         }
     }
@@ -193,6 +200,7 @@ mod rlp {
                         inner: BlockBody { transactions, ommers, withdrawals },
                         sidecars,
                         read_precompile_calls,
+                        highest_precompile_address,
                     },
             } = value;
 
@@ -203,6 +211,7 @@ mod rlp {
                 withdrawals: withdrawals.as_ref().map(Cow::Borrowed),
                 sidecars: sidecars.as_ref().map(Cow::Borrowed),
                 read_precompile_calls: read_precompile_calls.as_ref().map(Cow::Borrowed),
+                highest_precompile_address: highest_precompile_address.as_ref().map(Cow::Borrowed),
             }
         }
     }
@@ -225,6 +234,7 @@ mod rlp {
                 withdrawals,
                 sidecars,
                 read_precompile_calls,
+                highest_precompile_address,
             } = BlockBodyHelper::decode(buf)?;
             Ok(Self {
                 inner: BlockBody {
@@ -234,6 +244,7 @@ mod rlp {
                 },
                 sidecars: sidecars.map(|s| s.into_owned()),
                 read_precompile_calls: read_precompile_calls.map(|s| s.into_owned()),
+                highest_precompile_address: highest_precompile_address.map(|s| s.into_owned()),
             })
         }
     }
@@ -257,6 +268,7 @@ mod rlp {
                 withdrawals,
                 sidecars,
                 read_precompile_calls,
+                highest_precompile_address,
             } = BlockHelper::decode(buf)?;
             Ok(Self {
                 header: header.into_owned(),
@@ -268,6 +280,7 @@ mod rlp {
                     },
                     sidecars: sidecars.map(|s| s.into_owned()),
                     read_precompile_calls: read_precompile_calls.map(|s| s.into_owned()),
+                    highest_precompile_address: highest_precompile_address.map(|s| s.into_owned()),
                 },
             })
         }
@@ -283,6 +296,7 @@ pub mod serde_bincode_compat {
         inner: BincodeReprFor<'a, BlockBody>,
         sidecars: Option<Cow<'a, Vec<BlobTransactionSidecar>>>,
         read_precompile_calls: Option<Cow<'a, ReadPrecompileCalls>>,
+        highest_precompile_address: Option<Cow<'a, Address>>,
     }
 
     #[derive(Debug, Serialize, Deserialize)]
@@ -299,15 +313,25 @@ pub mod serde_bincode_compat {
                 inner: self.inner.as_repr(),
                 sidecars: self.sidecars.as_ref().map(Cow::Borrowed),
                 read_precompile_calls: self.read_precompile_calls.as_ref().map(Cow::Borrowed),
+                highest_precompile_address: self
+                    .highest_precompile_address
+                    .as_ref()
+                    .map(Cow::Borrowed),
             }
         }
 
         fn from_repr(repr: Self::BincodeRepr<'_>) -> Self {
-            let HlBlockBodyBincode { inner, sidecars, read_precompile_calls } = repr;
+            let HlBlockBodyBincode {
+                inner,
+                sidecars,
+                read_precompile_calls,
+                highest_precompile_address,
+            } = repr;
             Self {
                 inner: BlockBody::from_repr(inner),
                 sidecars: sidecars.map(|s| s.into_owned()),
                 read_precompile_calls: read_precompile_calls.map(|s| s.into_owned()),
+                highest_precompile_address: highest_precompile_address.map(|s| s.into_owned()),
             }
         }
     }

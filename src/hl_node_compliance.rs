@@ -219,7 +219,8 @@ fn not_from_system_tx<Eth: EthWrapper>(log: &Log, provider: &Eth::Provider) -> b
     !transactions
         .iter()
         .filter(|tx| tx.is_system_transaction())
-        .map(|tx| *tx.tx_hash()).any(|tx_hash| tx_hash == log.transaction_hash.unwrap())
+        .map(|tx| *tx.tx_hash())
+        .any(|tx_hash| tx_hash == log.transaction_hash.unwrap())
 }
 
 /// Helper to convert a serde error into an [`ErrorObject`]
