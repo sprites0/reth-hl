@@ -30,7 +30,7 @@ use reth_rpc_eth_api::{
 use serde::Serialize;
 use std::{collections::HashSet, sync::Arc};
 use tokio_stream::{Stream, StreamExt};
-use tracing::{info, trace};
+use tracing::trace;
 
 pub trait EthWrapper:
     EthApiServer<
@@ -138,21 +138,51 @@ impl<Eth: EthWrapper> EthFilterApiServer<RpcTransaction<Eth::NetworkTypes>>
         let mut logs = self.filter.logs(filter).await?;
 
         let block_numbers: HashSet<_> = logs.iter().map(|log| log.block_number.unwrap()).collect();
-        info!("block_numbers: {:?}", block_numbers);
-        let system_tx_hashes: HashSet<_> = block_numbers
-            .into_iter()
-            .flat_map(|block_number| {
-                let block = self.provider.block_by_number(block_number).unwrap().unwrap();
-                let transactions = block.body.transactions().collect::<Vec<_>>();
-                transactions
-                    .iter()
-                    .filter(|tx| tx.is_system_transaction())
-                    .map(|tx| *tx.tx_hash())
-                    .collect::<Vec<_>>()
-            })
-            .collect();
 
+        // Build maps for efficient lookups
+        let mut system_tx_hashes = HashSet::new();
+        let mut block_system_tx_indices: std::collections::HashMap<u64, Vec<u64>> =
+            std::collections::HashMap::new();
+
+        for block_number in block_numbers {
+            let block = self.provider.block_by_number(block_number).unwrap().unwrap();
+            let transactions = block.body.transactions().collect::<Vec<_>>();
+
+            let mut system_indices = Vec::new();
+            for (index, tx) in transactions.iter().enumerate() {
+                if tx.is_system_transaction() {
+                    system_tx_hashes.insert(*tx.tx_hash());
+                    system_indices.push(index as u64);
+                }
+            }
+
+            if !system_indices.is_empty() {
+                // Sort indices for efficient binary search later
+                system_indices.sort_unstable();
+                block_system_tx_indices.insert(block_number, system_indices);
+            }
+        }
+
+        // Filter out logs from system transactions
         logs.retain(|log| !system_tx_hashes.contains(&log.transaction_hash.unwrap()));
+
+        // Adjust transaction_index for remaining logs
+        for log in &mut logs {
+            if let (Some(block_number), Some(tx_index)) =
+                (log.block_number, &mut log.transaction_index)
+            {
+                if let Some(system_indices) = block_system_tx_indices.get(&block_number) {
+                    // Count how many system transactions are before this transaction
+                    let system_tx_count_before = system_indices
+                        .iter()
+                        .take_while(|&&system_idx| system_idx < *tx_index)
+                        .count() as u64;
+
+                    *tx_index = tx_index.saturating_sub(system_tx_count_before);
+                }
+            }
+        }
+
         Ok(logs)
     }
 }
