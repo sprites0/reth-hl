@@ -7,6 +7,7 @@
 /// - eth_getBlockByNumber/eth_getBlockByHash
 /// - eth_getBlockReceipts
 use crate::HlBlock;
+use alloy_consensus::TxReceipt;
 use alloy_rpc_types::{
     pubsub::{Params, SubscriptionKind},
     Filter, FilterChanges, FilterId, Log, PendingTransactionFilterKind,
@@ -20,15 +21,14 @@ use reth::{
 };
 use reth_network::NetworkInfo;
 use reth_primitives::NodePrimitives;
-use reth_primitives_traits::SignedTransaction as _;
-use reth_provider::{BlockIdReader, BlockReader, TransactionsProvider};
+use reth_provider::{BlockIdReader, BlockReader, ReceiptProvider, TransactionsProvider};
 use reth_rpc::{EthFilter, EthPubSub};
 use reth_rpc_eth_api::{
     EthApiServer, EthFilterApiServer, EthPubSubApiServer, FullEthApiTypes, RpcBlock, RpcHeader,
     RpcNodeCore, RpcNodeCoreExt, RpcReceipt, RpcTransaction, RpcTxReq,
 };
 use serde::Serialize;
-use std::{collections::HashSet, sync::Arc};
+use std::sync::Arc;
 use tokio_stream::{Stream, StreamExt};
 use tracing::trace;
 
@@ -135,55 +135,10 @@ impl<Eth: EthWrapper> EthFilterApiServer<RpcTransaction<Eth::NetworkTypes>>
     /// Handler for `eth_getLogs`
     async fn logs(&self, filter: Filter) -> RpcResult<Vec<Log>> {
         trace!(target: "rpc::eth", "Serving eth_getLogs");
-        let mut logs = self.filter.logs(filter).await?;
+        let logs = EthFilterApiServer::logs(&*self.filter, filter).await?;
+        let provider = self.provider.clone();
 
-        let block_numbers: HashSet<_> = logs.iter().map(|log| log.block_number.unwrap()).collect();
-
-        // Build maps for efficient lookups
-        let mut system_tx_hashes = HashSet::new();
-        let mut block_system_tx_indices: std::collections::HashMap<u64, Vec<u64>> =
-            std::collections::HashMap::new();
-
-        for block_number in block_numbers {
-            let block = self.provider.block_by_number(block_number).unwrap().unwrap();
-            let transactions = block.body.transactions().collect::<Vec<_>>();
-
-            let mut system_indices = Vec::new();
-            for (index, tx) in transactions.iter().enumerate() {
-                if tx.is_system_transaction() {
-                    system_tx_hashes.insert(*tx.tx_hash());
-                    system_indices.push(index as u64);
-                }
-            }
-
-            if !system_indices.is_empty() {
-                // Sort indices for efficient binary search later
-                system_indices.sort_unstable();
-                block_system_tx_indices.insert(block_number, system_indices);
-            }
-        }
-
-        // Filter out logs from system transactions
-        logs.retain(|log| !system_tx_hashes.contains(&log.transaction_hash.unwrap()));
-
-        // Adjust transaction_index for remaining logs
-        for log in &mut logs {
-            if let (Some(block_number), Some(tx_index)) =
-                (log.block_number, &mut log.transaction_index)
-            {
-                if let Some(system_indices) = block_system_tx_indices.get(&block_number) {
-                    // Count how many system transactions are before this transaction
-                    let system_tx_count_before = system_indices
-                        .iter()
-                        .take_while(|&&system_idx| system_idx < *tx_index)
-                        .count() as u64;
-
-                    *tx_index = tx_index.saturating_sub(system_tx_count_before);
-                }
-            }
-        }
-
-        Ok(logs)
+        Ok(logs.into_iter().filter_map(|log| exclude_system_tx::<Eth>(log, &provider)).collect())
     }
 }
 
@@ -231,7 +186,7 @@ impl<Eth: EthWrapper> EthPubSubApiServer<RpcTransaction<Eth::NetworkTypes>>
                     sink,
                     pubsub
                         .log_stream(filter)
-                        .filter(|log| not_from_system_tx::<Eth>(log, &provider)),
+                        .filter_map(|log| exclude_system_tx::<Eth>(log, &provider)),
                 )
                 .await;
             } else {
@@ -243,14 +198,36 @@ impl<Eth: EthWrapper> EthPubSubApiServer<RpcTransaction<Eth::NetworkTypes>>
     }
 }
 
-fn not_from_system_tx<Eth: EthWrapper>(log: &Log, provider: &Eth::Provider) -> bool {
-    let block = provider.block_by_number(log.block_number.unwrap()).unwrap().unwrap();
-    let transactions = block.body.transactions().collect::<Vec<_>>();
-    !transactions
-        .iter()
-        .filter(|tx| tx.is_system_transaction())
-        .map(|tx| *tx.tx_hash())
-        .any(|tx_hash| tx_hash == log.transaction_hash.unwrap())
+fn exclude_system_tx<Eth: EthWrapper>(mut log: Log, provider: &Eth::Provider) -> Option<Log> {
+    let transaction_index = log.transaction_index?;
+    let log_index = log.log_index?;
+
+    let receipts = provider.receipts_by_block(log.block_number?.into()).unwrap()?;
+
+    // System transactions are always at the beginning of the block,
+    // so we can use the transaction index to determine if the log is from a system transaction,
+    // and if it is, we can exclude it.
+    //
+    // For non-system transactions, we can just return the log as is, and the client will
+    // adjust the transaction index accordingly.
+    let mut system_tx_count = 0u64;
+    let mut system_tx_logs_count = 0u64;
+
+    for receipt in receipts {
+        let is_system_tx = receipt.cumulative_gas_used() == 0;
+        if is_system_tx {
+            system_tx_count += 1;
+            system_tx_logs_count += receipt.logs().len() as u64;
+        }
+    }
+
+    if system_tx_count > transaction_index {
+        return None;
+    }
+
+    log.transaction_index = Some(transaction_index - system_tx_count);
+    log.log_index = Some(log_index - system_tx_logs_count);
+    Some(log)
 }
 
 /// Helper to convert a serde error into an [`ErrorObject`]
