@@ -215,11 +215,7 @@ impl HlNodeBlockSource {
                 .collect();
             subfiles.sort();
 
-            for (file_name_num, subfile) in subfiles {
-                if file_name_num < next_height {
-                    continue;
-                }
-
+            for (_, subfile) in subfiles {
                 // Fast path: check the last line of the file
                 let last_line = read_last_line(&subfile);
                 if let Ok((_, height)) = line_to_evm_block(&last_line) {
@@ -239,6 +235,7 @@ impl HlNodeBlockSource {
                 next_height = next_expected_height;
             }
         }
+        info!("Backfilled {} blocks", u_cache.len());
 
         Ok(())
     }
