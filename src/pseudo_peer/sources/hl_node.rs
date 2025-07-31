@@ -1,5 +1,4 @@
 use std::{
-    collections::HashMap,
     fs::File,
     io::{BufRead, BufReader, Read, Seek, SeekFrom},
     ops::RangeInclusive,
@@ -8,6 +7,7 @@ use std::{
 };
 
 use futures::future::BoxFuture;
+use reth_network::cache::LruMap;
 use rangemap::RangeInclusiveMap;
 use serde::Deserialize;
 use time::{macros::format_description, Date, Duration, OffsetDateTime, Time};
@@ -23,14 +23,20 @@ const HOURLY_SUBDIR: &str = "hourly";
 
 #[derive(Debug)]
 pub struct LocalBlocksCache {
-    cache: HashMap<u64, BlockAndReceipts>,
+    cache: LruMap<u64, BlockAndReceipts>,
     // Lightweight range map to track the ranges of blocks in the local ingest directory
     ranges: RangeInclusiveMap<u64, PathBuf>,
 }
 
 impl LocalBlocksCache {
+    // 3660 blocks per hour
+    const CACHE_SIZE: u32 = 8000;
+
     fn new() -> Self {
-        Self { cache: HashMap::new(), ranges: RangeInclusiveMap::new() }
+        Self {
+            cache: LruMap::new(Self::CACHE_SIZE),
+            ranges: RangeInclusiveMap::new(),
+        }
     }
 
     fn load_scan_result(&mut self, scan_result: ScanResult) {
@@ -215,6 +221,7 @@ impl HlNodeBlockSource {
             return None;
         };
 
+        info!("Loading block data from {:?}", path);
         u_cache.load_scan_result(scan_hour_file(&path, &mut 0, height));
         u_cache.cache.get(&height).cloned()
     }
