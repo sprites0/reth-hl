@@ -8,7 +8,7 @@ use std::{
 
 use futures::future::BoxFuture;
 use serde::Deserialize;
-use time::{format_description, Duration, OffsetDateTime};
+use time::{macros::format_description, Date, Duration, OffsetDateTime, Time};
 use tokio::sync::Mutex;
 use tracing::{info, warn};
 
@@ -78,7 +78,7 @@ fn scan_hour_file(path: &Path, last_line: &mut usize, start_height: u64) -> Scan
 }
 
 fn date_from_datetime(dt: OffsetDateTime) -> String {
-    dt.format(&format_description::parse("[year][month][day]").unwrap()).unwrap()
+    dt.format(&format_description!("[year][month][day]")).unwrap()
 }
 
 impl BlockSource for HlNodeBlockSource {
@@ -165,16 +165,14 @@ impl HlNodeBlockSource {
     }
 
     fn datetime_from_path(path: &Path) -> Option<OffsetDateTime> {
-        let dt_part = path.parent()?.parent()?.file_name()?.to_str()?;
+        let dt_part = path.parent()?.file_name()?.to_str()?;
         let hour_part = path.file_name()?.to_str()?;
-        let dt = OffsetDateTime::parse(
-            dt_part,
-            &format_description::parse("[year][month][day]").unwrap(),
-        )
-        .ok()?;
+
         let hour: u8 = hour_part.parse().ok()?;
-        let dt = dt.replace_hour(hour).ok()?;
-        Some(dt)
+        Some(OffsetDateTime::new_utc(
+            Date::parse(&format!("{dt_part}"), &format_description!("[year][month][day]")).ok()?,
+            Time::from_hms(hour, 0, 0).ok()?,
+        ))
     }
 
     fn all_hourly_files(root: &Path) -> Option<Vec<PathBuf>> {
@@ -182,8 +180,11 @@ impl HlNodeBlockSource {
         let mut files = Vec::new();
         for entry in std::fs::read_dir(dir).ok()? {
             let file = entry.ok()?.path();
-            let subfiles: Vec<_> =
-                std::fs::read_dir(&file).ok()?.filter_map(|f| f.ok().map(|f| f.path())).collect();
+            let subfiles: Vec<_> = std::fs::read_dir(&file)
+                .ok()?
+                .filter_map(|f| f.ok().map(|f| f.path()))
+                .filter(|p| Self::datetime_from_path(p).is_some())
+                .collect();
             files.extend(subfiles);
         }
         files.sort();
@@ -305,5 +306,16 @@ impl HlNodeBlockSource {
         };
         block_source.run(next_block_number).await.unwrap();
         block_source
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn test_datetime_from_path() {
+        let path = Path::new("/home/username/hl/data/evm_block_and_receipts/hourly/20250731/4");
+        let dt = HlNodeBlockSource::datetime_from_path(path).unwrap();
+        println!("{:?}", dt);
     }
 }
