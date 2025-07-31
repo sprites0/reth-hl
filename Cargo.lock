@@ -9341,6 +9341,7 @@ dependencies = [
  "reth-rpc",
  "reth-rpc-engine-api",
  "reth-rpc-eth-api",
+ "reth-stages-types",
  "reth-tracing",
  "reth-transaction-pool",
  "reth-trie-common",

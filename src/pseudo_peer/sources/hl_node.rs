@@ -4,7 +4,7 @@ use std::{
     sync::Arc,
 };
 
-use eyre::{Context, ContextCompat};
+use eyre::Context;
 use futures::future::BoxFuture;
 use reth_network::cache::LruMap;
 use serde::Deserialize;
@@ -81,7 +81,7 @@ fn scan_hour_file(path: &Path, last_line: &mut usize, start_height: u64) -> Scan
             continue;
         }
 
-        let Ok((parsed_block, height)) = line_to_evm_block(&line) else {
+        let Ok((parsed_block, height)) = line_to_evm_block(line) else {
             warn!("Failed to parse line: {}...", line.get(0..50).unwrap_or(line));
             continue;
         };
@@ -223,11 +223,11 @@ impl HlNodeBlockSource {
                         continue;
                     }
                 } else {
-                    warn!("Failed to parse last line of file, fallback to slow path: {:?}", file);
+                    warn!("Failed to parse last line of file, fallback to slow path: {:?}", subfile);
                 }
 
                 let ScanResult { next_expected_height, new_blocks } =
-                    scan_hour_file(&file, &mut 0, next_height);
+                    scan_hour_file(&subfile, &mut 0, next_height);
                 for blk in new_blocks {
                     let EvmBlock::Reth115(b) = &blk.block;
                     u_cache.insert(b.header.header.number, blk);
@@ -298,29 +298,23 @@ impl HlNodeBlockSource {
         });
     }
 
-    pub(crate) async fn run(&self) -> eyre::Result<()> {
-        let latest_block_number = self
-            .fallback
-            .find_latest_block_number()
-            .await
-            .context("Failed to find latest block number")?;
-
+    pub(crate) async fn run(&self, next_block_number: u64) -> eyre::Result<()> {
         let EvmBlock::Reth115(latest_block) =
-            self.fallback.collect_block(latest_block_number).await?.block;
+            self.fallback.collect_block(next_block_number).await?.block;
 
         let latest_block_ts = latest_block.header.header.timestamp;
 
-        self.start_local_ingest_loop(latest_block_number, latest_block_ts).await;
+        self.start_local_ingest_loop(next_block_number, latest_block_ts).await;
         Ok(())
     }
 
-    pub async fn new(fallback: BlockSourceBoxed, local_ingest_dir: PathBuf) -> Self {
+    pub async fn new(fallback: BlockSourceBoxed, local_ingest_dir: PathBuf, next_block_number: u64) -> Self {
         let block_source = HlNodeBlockSource {
             fallback,
             local_ingest_dir,
             local_blocks_cache: Arc::new(Mutex::new(LruMap::new(CACHE_SIZE))),
         };
-        block_source.run().await.unwrap();
+        block_source.run(next_block_number).await.unwrap();
         block_source
     }
 }

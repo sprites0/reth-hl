@@ -72,6 +72,7 @@ impl BlockSourceConfig {
 
     pub async fn create_block_source_from_node(
         &self,
+        next_block_number: u64,
         fallback_block_source: BlockSourceBoxed,
     ) -> BlockSourceBoxed {
         let Some(block_source_from_node) = self.block_source_from_node.as_ref() else {
@@ -82,14 +83,15 @@ impl BlockSourceConfig {
             HlNodeBlockSource::new(
                 fallback_block_source,
                 PathBuf::from(block_source_from_node.clone()),
+                next_block_number,
             )
             .await,
         ))
     }
 
-    pub async fn create_cached_block_source(&self) -> BlockSourceBoxed {
+    pub async fn create_cached_block_source(&self, next_block_number: u64) -> BlockSourceBoxed {
         let block_source = self.create_block_source().await;
-        let block_source = self.create_block_source_from_node(block_source).await;
+        let block_source = self.create_block_source_from_node(next_block_number, block_source).await;
         Arc::new(Box::new(CachedBlockSource::new(block_source)))
     }
 }
