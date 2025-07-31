@@ -100,12 +100,16 @@ impl BlockSource for HlNodeBlockSource {
                     "No EVM blocks from hl-node found at {:?}; fallback to s3/ingest-dir",
                     self.local_ingest_dir
                 );
-                return None;
+                return self.fallback.find_latest_block_number().await;
             };
             let mut file = File::open(&dir).expect("Failed to open hour file path");
             let last_line = read_last_complete_line(&mut file);
             let Ok((_, height)) = line_to_evm_block(&last_line) else {
-                return None;
+                warn!(
+                    "Failed to parse the hl-node hourly file at {:?}; fallback to s3/ingest-dir",
+                    file
+                );
+                return self.fallback.find_latest_block_number().await;
             };
 
             info!("Latest block number: {} with path {}", height, dir.display());
