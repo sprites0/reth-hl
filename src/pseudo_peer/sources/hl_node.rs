@@ -1,4 +1,5 @@
 use std::{
+    collections::HashMap,
     io::{BufRead, BufReader, Read, Seek, SeekFrom},
     path::{Path, PathBuf},
     sync::Arc,
@@ -6,7 +7,6 @@ use std::{
 
 use eyre::Context;
 use futures::future::BoxFuture;
-use reth_network::cache::LruMap;
 use serde::Deserialize;
 use time::{format_description, Duration, OffsetDateTime};
 use tokio::sync::Mutex;
@@ -20,11 +20,8 @@ use super::{BlockSource, BlockSourceBoxed};
 const TAIL_INTERVAL: std::time::Duration = std::time::Duration::from_millis(25);
 /// Sub‑directory that contains day folders (inside `local_ingest_dir`).
 const HOURLY_SUBDIR: &str = "hourly";
-/// Maximum number of blocks to cache blocks from hl-node.
-/// In normal situation, 0~1 blocks will be cached.
-const CACHE_SIZE: u32 = 1000;
 
-type LocalBlocksCache = Arc<Mutex<LruMap<u64, BlockAndReceipts>>>;
+type LocalBlocksCache = Arc<Mutex<HashMap<u64, BlockAndReceipts>>>;
 
 /// Block source that monitors the local ingest directory for the HL node.
 ///
@@ -223,7 +220,10 @@ impl HlNodeBlockSource {
                         continue;
                     }
                 } else {
-                    warn!("Failed to parse last line of file, fallback to slow path: {:?}", subfile);
+                    warn!(
+                        "Failed to parse last line of file, fallback to slow path: {:?}",
+                        subfile
+                    );
                 }
 
                 let ScanResult { next_expected_height, new_blocks } =
@@ -308,11 +308,15 @@ impl HlNodeBlockSource {
         Ok(())
     }
 
-    pub async fn new(fallback: BlockSourceBoxed, local_ingest_dir: PathBuf, next_block_number: u64) -> Self {
+    pub async fn new(
+        fallback: BlockSourceBoxed,
+        local_ingest_dir: PathBuf,
+        next_block_number: u64,
+    ) -> Self {
         let block_source = HlNodeBlockSource {
             fallback,
             local_ingest_dir,
-            local_blocks_cache: Arc::new(Mutex::new(LruMap::new(CACHE_SIZE))),
+            local_blocks_cache: Arc::new(Mutex::new(HashMap::new())),
         };
         block_source.run(next_block_number).await.unwrap();
         block_source
