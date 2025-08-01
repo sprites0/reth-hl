@@ -7,8 +7,8 @@ use std::{
 };
 
 use futures::future::BoxFuture;
-use reth_network::cache::LruMap;
 use rangemap::RangeInclusiveMap;
+use reth_network::cache::LruMap;
 use serde::Deserialize;
 use time::{macros::format_description, Date, Duration, OffsetDateTime, Time};
 use tokio::sync::Mutex;
@@ -33,10 +33,7 @@ impl LocalBlocksCache {
     const CACHE_SIZE: u32 = 8000;
 
     fn new() -> Self {
-        Self {
-            cache: LruMap::new(Self::CACHE_SIZE),
-            ranges: RangeInclusiveMap::new(),
-        }
+        Self { cache: LruMap::new(Self::CACHE_SIZE), ranges: RangeInclusiveMap::new() }
     }
 
     fn load_scan_result(&mut self, scan_result: ScanResult) {
@@ -280,7 +277,19 @@ impl HlNodeBlockSource {
             scan_result.new_blocks.clear();
             u_cache.load_scan_result(scan_result);
         }
-        info!("Backfilled {} blocks", u_cache.cache.len());
+
+        if u_cache.ranges.is_empty() {
+            warn!("No ranges found in {:?}", root);
+        } else {
+            let (min, _) = u_cache.ranges.first_range_value().unwrap();
+            let (max, _) = u_cache.ranges.last_range_value().unwrap();
+            info!(
+                "Populated {} ranges (min: {}, max: {})",
+                u_cache.ranges.len(),
+                min.start(),
+                max.end()
+            );
+        }
 
         Ok(())
     }
