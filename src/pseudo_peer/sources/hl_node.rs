@@ -74,9 +74,16 @@ fn line_to_evm_block(line: &str) -> serde_json::Result<(BlockAndReceipts, u64)> 
     Ok((parsed_block, height))
 }
 
-fn scan_hour_file(path: &Path, last_line: &mut usize, start_height: u64) -> ScanResult {
+struct ScanOptions {
+    start_height: u64,
+    only_load_ranges: bool,
+}
+
+fn scan_hour_file(path: &Path, last_line: &mut usize, options: ScanOptions) -> ScanResult {
     let file = File::open(path).expect("Failed to open hour file path");
     let reader = BufReader::new(file);
+
+    let ScanOptions { start_height, only_load_ranges } = options;
 
     let mut new_blocks = Vec::new();
     let mut last_height = start_height;
@@ -95,7 +102,9 @@ fn scan_hour_file(path: &Path, last_line: &mut usize, start_height: u64) -> Scan
             Ok((parsed_block, height)) => {
                 if height >= start_height {
                     last_height = last_height.max(height);
-                    new_blocks.push(parsed_block);
+                    if !only_load_ranges {
+                        new_blocks.push(parsed_block);
+                    }
                     *last_line = line_idx;
                 }
                 if matches!(current_range, Some((_, end)) if end + 1 == height) {
@@ -219,7 +228,11 @@ impl HlNodeBlockSource {
         };
 
         info!("Loading block data from {:?}", path);
-        u_cache.load_scan_result(scan_hour_file(&path, &mut 0, 0));
+        u_cache.load_scan_result(scan_hour_file(
+            &path,
+            &mut 0,
+            ScanOptions { start_height: 0, only_load_ranges: false },
+        ));
         u_cache.cache.get(&height).cloned()
     }
 
@@ -272,7 +285,11 @@ impl HlNodeBlockSource {
                 warn!("Failed to parse last line of file, fallback to slow path: {:?}", subfile);
             }
 
-            let mut scan_result = scan_hour_file(&subfile, &mut 0, cutoff_height);
+            let mut scan_result = scan_hour_file(
+                &subfile,
+                &mut 0,
+                ScanOptions { start_height: cutoff_height, only_load_ranges: true },
+            );
             // Only store the block ranges for now; actual block data will be loaded lazily later to optimize memory usage
             scan_result.new_blocks.clear();
             u_cache.load_scan_result(scan_result);
@@ -319,7 +336,11 @@ impl HlNodeBlockSource {
                 let hour_file = root.join(HOURLY_SUBDIR).join(&day_str).join(format!("{hour}"));
 
                 if hour_file.exists() {
-                    let scan_result = scan_hour_file(&hour_file, &mut last_line, next_height);
+                    let scan_result = scan_hour_file(
+                        &hour_file,
+                        &mut last_line,
+                        ScanOptions { start_height: next_height, only_load_ranges: false },
+                    );
                     next_height = scan_result.next_expected_height;
 
                     let mut u_cache = cache.lock().await;
