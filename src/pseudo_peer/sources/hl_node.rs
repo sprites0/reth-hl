@@ -222,7 +222,7 @@ impl HlNodeBlockSource {
         };
 
         info!("Loading block data from {:?}", path);
-        u_cache.load_scan_result(scan_hour_file(&path, &mut 0, height));
+        u_cache.load_scan_result(scan_hour_file(&path, &mut 0, 0));
         u_cache.cache.get(&height).cloned()
     }
 
