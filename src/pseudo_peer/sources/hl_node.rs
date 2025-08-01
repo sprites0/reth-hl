@@ -143,9 +143,9 @@ impl BlockSource for HlNodeBlockSource {
     fn collect_block(&self, height: u64) -> BoxFuture<eyre::Result<BlockAndReceipts>> {
         Box::pin(async move {
             if let Some(block) = self.try_collect_local_block(height).await {
-                info!("Returning locally synced block for @ Height [{height}]");
                 Ok(block)
             } else {
+                info!("Falling back to s3/ingest-dir for block @ Height [{height}]");
                 self.fallback.collect_block(height).await
             }
         })
