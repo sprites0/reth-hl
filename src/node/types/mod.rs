@@ -14,7 +14,7 @@ pub type ReadPrecompileCall = (Address, Vec<(ReadPrecompileInput, ReadPrecompile
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, Default)]
 pub struct ReadPrecompileCalls(pub Vec<ReadPrecompileCall>);
 
-mod reth_compat;
+pub(crate) mod reth_compat;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct HlExtras {
@@ -38,7 +38,7 @@ impl Decodable for ReadPrecompileCalls {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
 pub struct BlockAndReceipts {
     pub block: EvmBlock,
     pub receipts: Vec<LegacyReceipt>,
@@ -71,12 +71,12 @@ impl BlockAndReceipts {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
 pub enum EvmBlock {
     Reth115(reth_compat::SealedBlock),
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
 pub struct LegacyReceipt {
     tx_type: LegacyTxType,
     success: bool,
@@ -84,7 +84,7 @@ pub struct LegacyReceipt {
     logs: Vec<Log>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
 enum LegacyTxType {
     Legacy = 0,
     Eip2930 = 1,
@@ -93,7 +93,7 @@ enum LegacyTxType {
     Eip7702 = 4,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
 pub struct SystemTx {
     pub tx: reth_compat::Transaction,
     pub receipt: Option<LegacyReceipt>,

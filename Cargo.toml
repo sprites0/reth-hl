@@ -164,5 +164,5 @@ client = [
     "reth-rpc-eth-api/client",
 ]
 
-[profile.test]
-inherits = "release"
+[dev-dependencies]
+tempfile = "3.20.0"
