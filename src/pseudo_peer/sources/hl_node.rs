@@ -231,11 +231,6 @@ fn read_last_complete_line<R: Read + Seek>(read: &mut R) -> Option<(BlockAndRece
         pos -= read_size;
     }
 
-    println!(
-        "last_line: {:?} {:?}",
-        String::from_utf8(last_line.clone()).unwrap(),
-        line_to_evm_block(&String::from_utf8(last_line.clone()).unwrap())
-    );
     line_to_evm_block(&String::from_utf8(last_line).unwrap()).ok()
 }
 
@@ -244,8 +239,9 @@ impl HlNodeBlockSource {
     /// But if we immediately fallback to s3/ingest-dir, in case of S3, it may cause unnecessary
     /// requests to S3 while it'll return 404.
     ///
-    /// So we allow a small threshold to avoid unnecessary fallback.
-    pub(crate) const MAX_ALLOWED_THRESHOLD_BEFORE_FALLBACK: Duration = Duration::milliseconds(500);
+    /// To avoid unnecessary fallback, we set a short threshold period.
+    /// This threshold is several times longer than the expected block time, reducing redundant fallback attempts.
+    pub(crate) const MAX_ALLOWED_THRESHOLD_BEFORE_FALLBACK: Duration = Duration::milliseconds(5000);
 
     async fn update_last_fetch(&self, height: u64, now: OffsetDateTime) {
         if let Some((last_height, _)) = *self.last_local_fetch.lock().await {
@@ -314,8 +310,6 @@ impl HlNodeBlockSource {
         let mut u_cache = cache.lock().await;
 
         for subfile in Self::all_hourly_files(root).unwrap_or_default() {
-            let mut file = File::open(&subfile).expect("Failed to open hour file path");
-            println!("subfile: {:?} {:?}", subfile, read_last_complete_line(&mut file));
             let mut file = File::open(&subfile).expect("Failed to open hour file path");
             if let Some((_, height)) = read_last_complete_line(&mut file) {
                 if height < cutoff_height {
