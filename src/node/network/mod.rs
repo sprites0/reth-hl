@@ -24,6 +24,8 @@ use reth_eth_wire::{BasicNetworkPrimitives, NewBlock, NewBlockPayload};
 use reth_ethereum_primitives::PooledTransactionVariant;
 use reth_network::{NetworkConfig, NetworkHandle, NetworkManager};
 use reth_network_api::PeersInfo;
+use reth_provider::StageCheckpointReader;
+use reth_stages_types::StageId;
 use std::sync::Arc;
 use tokio::sync::{mpsc, oneshot, Mutex};
 use tracing::info;
@@ -235,8 +237,13 @@ where
         let chain_spec = ctx.chain_spec();
         info!(target: "reth::cli", enode=%local_node_record, "P2P networking initialized");
 
+        let next_block_number =
+            ctx.provider().get_stage_checkpoint(StageId::Finish)?.unwrap_or_default().block_number
+                + 1;
+
         ctx.task_executor().spawn_critical("pseudo peer", async move {
-            let block_source = block_source_config.create_cached_block_source().await;
+            let block_source =
+                block_source_config.create_cached_block_source(next_block_number).await;
             start_pseudo_peer(chain_spec, local_node_record.to_string(), block_source)
                 .await
                 .unwrap();
