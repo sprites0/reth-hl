@@ -161,7 +161,6 @@ impl BlockSource for HlNodeBlockSource {
                 }
             }
 
-            info!("Falling back to s3/ingest-dir for block @ Height [{height}]");
             let block = self.fallback.collect_block(height).await?;
             self.update_last_fetch(height, now).await;
             Ok(block)
