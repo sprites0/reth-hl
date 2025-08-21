@@ -12,7 +12,7 @@ use alloy_consensus::{BlockBody, Header};
 use alloy_primitives::U128;
 use alloy_rpc_types::engine::{ForkchoiceState, PayloadStatusEnum};
 use futures::{future::Either, stream::FuturesUnordered, StreamExt};
-use reth_engine_primitives::{BeaconConsensusEngineHandle, EngineTypes};
+use reth_engine_primitives::{ConsensusEngineHandle, EngineTypes};
 use reth_eth_wire::NewBlock;
 use reth_network::{
     import::{BlockImportError, BlockImportEvent, BlockImportOutcome, BlockValidation},
@@ -55,7 +55,7 @@ where
     Provider: BlockNumReader + Clone,
 {
     /// The handle to communicate with the engine service
-    engine: BeaconConsensusEngineHandle<HlPayloadTypes>,
+    engine: ConsensusEngineHandle<HlPayloadTypes>,
     /// The consensus implementation
     consensus: Arc<HlConsensus<Provider>>,
     /// Receive the new block from the network
@@ -73,7 +73,7 @@ where
     /// Create a new block import service
     pub fn new(
         consensus: Arc<HlConsensus<Provider>>,
-        engine: BeaconConsensusEngineHandle<HlPayloadTypes>,
+        engine: ConsensusEngineHandle<HlPayloadTypes>,
         from_network: UnboundedReceiver<IncomingBlock>,
         to_network: UnboundedSender<ImportEvent>,
     ) -> Self {
@@ -341,7 +341,7 @@ mod tests {
         async fn new(responses: EngineResponses) -> Self {
             let consensus = Arc::new(HlConsensus { provider: MockProvider });
             let (to_engine, from_engine) = mpsc::unbounded_channel();
-            let engine_handle = BeaconConsensusEngineHandle::new(to_engine);
+            let engine_handle = ConsensusEngineHandle::new(to_engine);
 
             handle_engine_msg(from_engine, responses).await;
 

@@ -1,4 +1,5 @@
 use revm::{
+    bytecode::opcode::BLOCKHASH,
     context::{ContextSetters, Evm, FrameStack},
     context_interface::ContextTr,
     handler::{
@@ -7,13 +8,14 @@ use revm::{
         EthFrame, EthPrecompiles, EvmTr, FrameInitOrResult, FrameTr, PrecompileProvider,
     },
     inspector::{InspectorEvmTr, JournalExt},
-    interpreter::{interpreter::EthInterpreter, InterpreterResult},
+    interpreter::{interpreter::EthInterpreter, Instruction, InterpreterResult},
     Inspector,
 };
 
 pub mod builder;
 pub mod ctx;
 mod exec;
+mod patch;
 
 pub struct HlEvmInner<
     CTX: ContextTr,
@@ -26,10 +28,20 @@ impl<CTX: ContextTr, INSP>
     HlEvmInner<CTX, INSP, EthInstructions<EthInterpreter, CTX>, EthPrecompiles>
 {
     pub fn new(ctx: CTX, inspector: INSP) -> Self {
+        let mut instruction = EthInstructions::new_mainnet();
+
+        const NON_PLACEHOLDER_BLOCK_HASH_HEIGHT: u64 = 243_538;
+        if ctx.chain_id() == 999 && ctx.block_number() < NON_PLACEHOLDER_BLOCK_HASH_HEIGHT {
+            instruction.insert_instruction(
+                BLOCKHASH,
+                Instruction::new(patch::blockhash_returning_placeholder, 20),
+            );
+        }
+
         Self(Evm {
             ctx,
             inspector,
-            instruction: EthInstructions::new_mainnet(),
+            instruction,
             precompiles: EthPrecompiles::default(),
             frame_stack: FrameStack::new(),
         })
@@ -125,23 +137,3 @@ where
         self.0.frame_return_result(result)
     }
 }
-
-// #[cfg(test)]
-// mod test {
-//     use super::{builder::HlBuilder, ctx::DefaultHl};
-//     use revm::{
-//         inspector::{InspectEvm, NoOpInspector},
-//         Context, ExecuteEvm,
-//     };
-
-//     #[test]
-//     fn default_run_bsc() {
-//         let ctx = Context::bsc();
-//         let mut evm = ctx.build_bsc_with_inspector(NoOpInspector {});
-
-//         // execute
-//         let _ = evm.replay();
-//         // inspect
-//         let _ = evm.inspect_replay();
-//     }
-// }

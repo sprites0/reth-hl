@@ -1,11 +1,12 @@
 //! HlNodePrimitives::TransactionSigned; it's the same as ethereum transaction type,
 //! except that it supports pseudo signer for system transactions.
 use alloy_consensus::{
-    crypto::RecoveryError, error::ValueError, EthereumTxEnvelope, SignableTransaction, Signed,
-    Transaction as TransactionTrait, TransactionEnvelope, TxEip1559, TxEip2930, TxEip4844,
-    TxEip4844WithSidecar, TxEip7702, TxLegacy, TxType, TypedTransaction,
+    crypto::RecoveryError, error::ValueError, EthereumTxEnvelope, EthereumTypedTransaction,
+    SignableTransaction, Signed, Transaction as TransactionTrait, TransactionEnvelope, TxEip1559,
+    TxEip2930, TxEip4844, TxEip4844WithSidecar, TxEip7702, TxLegacy, TxType, TypedTransaction,
 };
 use alloy_eips::{eip7594::BlobTransactionSidecarVariant, Encodable2718};
+use alloy_network::TxSigner;
 use alloy_primitives::{address, Address, TxHash, U256};
 use alloy_rpc_types::{Transaction, TransactionInfo, TransactionRequest};
 use alloy_signer::Signature;
@@ -21,7 +22,7 @@ use reth_primitives_traits::{
 };
 use reth_rpc_eth_api::{
     transaction::{FromConsensusTx, TryIntoTxEnv},
-    EthTxEnvError, TryIntoSimTx,
+    EthTxEnvError, SignTxRequestError, SignableTxRequest, TryIntoSimTx,
 };
 use revm::context::{BlockEnv, CfgEnv, TxEnv};
 
@@ -59,21 +60,18 @@ impl SignerRecoverable for TransactionSigned {
         }
         self.inner().recover_signer_unchecked()
     }
+
+    fn recover_unchecked_with_buf(&self, buf: &mut Vec<u8>) -> Result<Address, RecoveryError> {
+        if self.is_system_transaction() {
+            return Ok(s_to_address(self.signature().s()));
+        }
+        self.inner().recover_unchecked_with_buf(buf)
+    }
 }
 
 impl SignedTransaction for TransactionSigned {
     fn tx_hash(&self) -> &TxHash {
         self.inner().tx_hash()
-    }
-
-    fn recover_signer_unchecked_with_buf(
-        &self,
-        buf: &mut Vec<u8>,
-    ) -> Result<Address, RecoveryError> {
-        if self.is_system_transaction() {
-            return Ok(s_to_address(self.signature().s()));
-        }
-        self.inner().recover_signer_unchecked_with_buf(buf)
     }
 }
 
@@ -294,5 +292,34 @@ impl FromConsensusTx<TransactionSigned> for Transaction {
 
     fn from_consensus_tx(tx: TransactionSigned, signer: Address, tx_info: Self::TxInfo) -> Self {
         Self::from_transaction(Recovered::new_unchecked(tx.into_inner().into(), signer), tx_info)
+    }
+}
+
+impl SignableTxRequest<TransactionSigned> for TransactionRequest {
+    async fn try_build_and_sign(
+        self,
+        signer: impl TxSigner<Signature> + Send,
+    ) -> Result<TransactionSigned, SignTxRequestError> {
+        let mut tx =
+            self.build_typed_tx().map_err(|_| SignTxRequestError::InvalidTransactionRequest)?;
+        let signature = signer.sign_transaction(&mut tx).await?;
+        let signed = match tx {
+            EthereumTypedTransaction::Legacy(tx) => {
+                EthereumTxEnvelope::Legacy(tx.into_signed(signature))
+            }
+            EthereumTypedTransaction::Eip2930(tx) => {
+                EthereumTxEnvelope::Eip2930(tx.into_signed(signature))
+            }
+            EthereumTypedTransaction::Eip1559(tx) => {
+                EthereumTxEnvelope::Eip1559(tx.into_signed(signature))
+            }
+            EthereumTypedTransaction::Eip4844(tx) => {
+                EthereumTxEnvelope::Eip4844(TxEip4844::from(tx).into_signed(signature))
+            }
+            EthereumTypedTransaction::Eip7702(tx) => {
+                EthereumTxEnvelope::Eip7702(tx.into_signed(signature))
+            }
+        };
+        Ok(TransactionSigned::Default(signed))
     }
 }

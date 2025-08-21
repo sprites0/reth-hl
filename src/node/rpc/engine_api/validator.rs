@@ -6,20 +6,15 @@ use crate::{
 use alloy_consensus::BlockHeader;
 use alloy_eips::eip4895::Withdrawal;
 use alloy_primitives::B256;
-use alloy_rpc_types_engine::{PayloadAttributes, PayloadError};
+use alloy_rpc_types_engine::PayloadError;
 use reth::{
     api::{FullNodeComponents, NodeTypes},
-    builder::{rpc::EngineValidatorBuilder, AddOnsContext},
-    consensus::ConsensusError,
+    builder::{rpc::PayloadValidatorBuilder, AddOnsContext},
 };
-use reth_engine_primitives::{EngineValidator, ExecutionPayload, PayloadValidator};
-use reth_payload_primitives::{
-    EngineApiMessageVersion, EngineObjectValidationError, NewPayloadError, PayloadOrAttributes,
-    PayloadTypes,
-};
+use reth_engine_primitives::{ExecutionPayload, PayloadValidator};
+use reth_payload_primitives::NewPayloadError;
 use reth_primitives::{RecoveredBlock, SealedBlock};
 use reth_primitives_traits::Block as _;
-use reth_trie_common::HashedPostState;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
@@ -27,27 +22,27 @@ use super::payload::HlPayloadTypes;
 
 #[derive(Debug, Default, Clone)]
 #[non_exhaustive]
-pub struct HlEngineValidatorBuilder;
+pub struct HlPayloadValidatorBuilder;
 
-impl<Node, Types> EngineValidatorBuilder<Node> for HlEngineValidatorBuilder
+impl<Node, Types> PayloadValidatorBuilder<Node> for HlPayloadValidatorBuilder
 where
     Types: NodeTypes<ChainSpec = HlChainSpec, Payload = HlPayloadTypes, Primitives = HlPrimitives>,
     Node: FullNodeComponents<Types = Types>,
 {
-    type Validator = HlEngineValidator;
+    type Validator = HlPayloadValidator;
 
     async fn build(self, ctx: &AddOnsContext<'_, Node>) -> eyre::Result<Self::Validator> {
-        Ok(HlEngineValidator::new(Arc::new(ctx.config.chain.clone().as_ref().clone())))
+        Ok(HlPayloadValidator::new(Arc::new(ctx.config.chain.clone().as_ref().clone())))
     }
 }
 
 /// Validator for Optimism engine API.
 #[derive(Debug, Clone)]
-pub struct HlEngineValidator {
+pub struct HlPayloadValidator {
     inner: HlExecutionPayloadValidator<HlChainSpec>,
 }
 
-impl HlEngineValidator {
+impl HlPayloadValidator {
     /// Instantiates a new validator.
     pub fn new(chain_spec: Arc<HlChainSpec>) -> Self {
         Self { inner: HlExecutionPayloadValidator { inner: chain_spec } }
@@ -87,46 +82,16 @@ impl ExecutionPayload for HlExecutionData {
     }
 }
 
-impl PayloadValidator for HlEngineValidator {
+impl PayloadValidator<HlPayloadTypes> for HlPayloadValidator {
     type Block = HlBlock;
-    type ExecutionData = HlExecutionData;
 
     fn ensure_well_formed_payload(
         &self,
-        payload: Self::ExecutionData,
+        payload: HlExecutionData,
     ) -> Result<RecoveredBlock<Self::Block>, NewPayloadError> {
         let sealed_block =
             self.inner.ensure_well_formed_payload(payload).map_err(NewPayloadError::other)?;
         sealed_block.try_recover().map_err(|e| NewPayloadError::Other(e.into()))
-    }
-
-    fn validate_block_post_execution_with_hashed_state(
-        &self,
-        _state_updates: &HashedPostState,
-        _block: &RecoveredBlock<Self::Block>,
-    ) -> Result<(), ConsensusError> {
-        Ok(())
-    }
-}
-
-impl<Types> EngineValidator<Types> for HlEngineValidator
-where
-    Types: PayloadTypes<PayloadAttributes = PayloadAttributes, ExecutionData = HlExecutionData>,
-{
-    fn validate_version_specific_fields(
-        &self,
-        _version: EngineApiMessageVersion,
-        _payload_or_attrs: PayloadOrAttributes<'_, Self::ExecutionData, PayloadAttributes>,
-    ) -> Result<(), EngineObjectValidationError> {
-        Ok(())
-    }
-
-    fn ensure_well_formed_attributes(
-        &self,
-        _version: EngineApiMessageVersion,
-        _attributes: &PayloadAttributes,
-    ) -> Result<(), EngineObjectValidationError> {
-        Ok(())
     }
 }
 

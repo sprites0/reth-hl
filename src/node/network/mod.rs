@@ -19,7 +19,7 @@ use reth::{
     transaction_pool::{PoolTransaction, TransactionPool},
 };
 use reth_discv4::NodeRecord;
-use reth_engine_primitives::BeaconConsensusEngineHandle;
+use reth_engine_primitives::ConsensusEngineHandle;
 use reth_eth_wire::{BasicNetworkPrimitives, NewBlock, NewBlockPayload};
 use reth_ethereum_primitives::PooledTransactionVariant;
 use reth_network::{NetworkConfig, NetworkHandle, NetworkManager};
@@ -31,8 +31,7 @@ use tokio::sync::{mpsc, oneshot, Mutex};
 use tracing::info;
 
 pub mod block_import;
-// pub mod handshake;
-// pub(crate) mod upgrade_status;
+
 /// HL `NewBlock` message value.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HlNewBlock(pub NewBlock<HlBlock>);
@@ -157,7 +156,7 @@ pub type HlNetworkPrimitives =
 #[derive(Debug)]
 pub struct HlNetworkBuilder {
     pub(crate) engine_handle_rx:
-        Arc<Mutex<Option<oneshot::Receiver<BeaconConsensusEngineHandle<HlPayloadTypes>>>>>,
+        Arc<Mutex<Option<oneshot::Receiver<ConsensusEngineHandle<HlPayloadTypes>>>>>,
 
     pub(crate) block_source_config: BlockSourceConfig,
 }
@@ -237,9 +236,12 @@ where
         let chain_spec = ctx.chain_spec();
         info!(target: "reth::cli", enode=%local_node_record, "P2P networking initialized");
 
-        let next_block_number =
-            ctx.provider().get_stage_checkpoint(StageId::Finish)?.unwrap_or_default().block_number
-                + 1;
+        let next_block_number = ctx
+            .provider()
+            .get_stage_checkpoint(StageId::Finish)?
+            .unwrap_or_default()
+            .block_number +
+            1;
 
         ctx.task_executor().spawn_critical("pseudo peer", async move {
             let block_source =

@@ -138,7 +138,8 @@ pub struct HlNodeBlockSource {
     pub fallback: BlockSourceBoxed,
     pub local_ingest_dir: PathBuf,
     pub local_blocks_cache: Arc<Mutex<LocalBlocksCache>>, // height → block
-    pub last_local_fetch: Arc<Mutex<Option<(u64, OffsetDateTime)>>>, // for rate limiting requests to fallback
+    // for rate limiting requests to fallback
+    pub last_local_fetch: Arc<Mutex<Option<(u64, OffsetDateTime)>>>,
 }
 
 impl BlockSource for HlNodeBlockSource {
@@ -217,9 +218,7 @@ fn read_last_complete_line<R: Read + Seek>(read: &mut R) -> Option<(BlockAndRece
 
         if let Some(idx) = last_line.iter().rposition(|&b| b == b'\n') {
             let candidate = &last_line[idx + 1..];
-            if let Ok((evm_block, height)) =
-                line_to_evm_block(str::from_utf8(candidate).unwrap())
-            {
+            if let Ok((evm_block, height)) = line_to_evm_block(str::from_utf8(candidate).unwrap()) {
                 return Some((evm_block, height));
             }
             // Incomplete line; truncate and continue
@@ -241,7 +240,8 @@ impl HlNodeBlockSource {
     /// requests to S3 while it'll return 404.
     ///
     /// To avoid unnecessary fallback, we set a short threshold period.
-    /// This threshold is several times longer than the expected block time, reducing redundant fallback attempts.
+    /// This threshold is several times longer than the expected block time, reducing redundant
+    /// fallback attempts.
     pub(crate) const MAX_ALLOWED_THRESHOLD_BEFORE_FALLBACK: Duration = Duration::milliseconds(5000);
 
     async fn update_last_fetch(&self, height: u64, now: OffsetDateTime) {
@@ -327,7 +327,8 @@ impl HlNodeBlockSource {
                 &mut 0,
                 ScanOptions { start_height: cutoff_height, only_load_ranges: true },
             );
-            // Only store the block ranges for now; actual block data will be loaded lazily later to optimize memory usage
+            // Only store the block ranges for now; actual block data will be loaded lazily later to
+            // optimize memory usage
             scan_result.new_blocks.clear();
             u_cache.load_scan_result(scan_result);
         }
@@ -434,13 +435,13 @@ impl HlNodeBlockSource {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::node::types::reth_compat;
-    use crate::node::types::ReadPrecompileCalls;
-    use crate::pseudo_peer::sources::LocalBlockSource;
+    use crate::{
+        node::types::{reth_compat, ReadPrecompileCalls},
+        pseudo_peer::sources::LocalBlockSource,
+    };
     use alloy_consensus::{BlockBody, Header};
     use alloy_primitives::{Address, Bloom, Bytes, B256, B64, U256};
-    use std::io::Write;
-    use std::time::Duration;
+    use std::{io::Write, time::Duration};
 
     #[test]
     fn test_datetime_from_path() {

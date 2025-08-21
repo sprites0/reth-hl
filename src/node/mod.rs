@@ -2,11 +2,11 @@ use crate::{
     chainspec::HlChainSpec,
     node::{
         pool::HlPoolBuilder,
-        primitives::{BlockBody, HlBlock, HlBlockBody, HlPrimitives, TransactionSigned},
+        primitives::{HlBlock, HlPrimitives},
         rpc::{
             engine_api::{
                 builder::HlEngineApiBuilder, payload::HlPayloadTypes,
-                validator::HlEngineValidatorBuilder,
+                validator::HlPayloadValidatorBuilder,
             },
             HlEthApiBuilder,
         },
@@ -19,15 +19,11 @@ use engine::HlPayloadServiceBuilder;
 use evm::HlExecutorBuilder;
 use network::HlNetworkBuilder;
 use reth::{
-    api::{FullNodeComponents, FullNodeTypes, NodeTypes},
-    builder::{
-        components::ComponentsBuilder, rpc::RpcAddOns, DebugNode, Node, NodeAdapter,
-        NodeComponentsBuilder,
-    },
+    api::{FullNodeTypes, NodeTypes},
+    builder::{components::ComponentsBuilder, rpc::RpcAddOns, Node, NodeAdapter},
 };
-use reth_engine_primitives::BeaconConsensusEngineHandle;
-use reth_trie_db::MerklePatriciaTrie;
-use std::sync::Arc;
+use reth_engine_primitives::ConsensusEngineHandle;
+use std::{marker::PhantomData, sync::Arc};
 use tokio::sync::{oneshot, Mutex};
 
 pub mod cli;
@@ -43,31 +39,21 @@ pub mod types;
 
 /// Hl addons configuring RPC types
 pub type HlNodeAddOns<N> =
-    RpcAddOns<N, HlEthApiBuilder, HlEngineValidatorBuilder, HlEngineApiBuilder>;
+    RpcAddOns<N, HlEthApiBuilder, HlPayloadValidatorBuilder, HlEngineApiBuilder>;
 
 /// Type configuration for a regular Hl node.
 #[derive(Debug, Clone)]
 pub struct HlNode {
-    engine_handle_rx:
-        Arc<Mutex<Option<oneshot::Receiver<BeaconConsensusEngineHandle<HlPayloadTypes>>>>>,
+    engine_handle_rx: Arc<Mutex<Option<oneshot::Receiver<ConsensusEngineHandle<HlPayloadTypes>>>>>,
     block_source_config: BlockSourceConfig,
-    hl_node_compliant: bool,
 }
 
 impl HlNode {
     pub fn new(
         block_source_config: BlockSourceConfig,
-        hl_node_compliant: bool,
-    ) -> (Self, oneshot::Sender<BeaconConsensusEngineHandle<HlPayloadTypes>>) {
+    ) -> (Self, oneshot::Sender<ConsensusEngineHandle<HlPayloadTypes>>) {
         let (tx, rx) = oneshot::channel();
-        (
-            Self {
-                engine_handle_rx: Arc::new(Mutex::new(Some(rx))),
-                block_source_config,
-                hl_node_compliant,
-            },
-            tx,
-        )
+        (Self { engine_handle_rx: Arc::new(Mutex::new(Some(rx))), block_source_config }, tx)
     }
 }
 
@@ -103,7 +89,6 @@ impl HlNode {
 impl NodeTypes for HlNode {
     type Primitives = HlPrimitives;
     type ChainSpec = HlChainSpec;
-    type StateCommitment = MerklePatriciaTrie;
     type Storage = HlStorage;
     type Payload = HlPayloadTypes;
 }
@@ -121,9 +106,7 @@ where
         HlConsensusBuilder,
     >;
 
-    type AddOns = HlNodeAddOns<
-        NodeAdapter<N, <Self::ComponentsBuilder as NodeComponentsBuilder<N>>::Components>,
-    >;
+    type AddOns = HlNodeAddOns<NodeAdapter<N>>;
 
     fn components_builder(&self) -> Self::ComponentsBuilder {
         Self::components(self)
@@ -131,37 +114,11 @@ where
 
     fn add_ons(&self) -> Self::AddOns {
         HlNodeAddOns::new(
-            HlEthApiBuilder { hl_node_compliant: self.hl_node_compliant },
+            HlEthApiBuilder { _nt: PhantomData },
+            Default::default(),
             Default::default(),
             Default::default(),
             Default::default(),
         )
-    }
-}
-
-impl<N> DebugNode<N> for HlNode
-where
-    N: FullNodeComponents<Types = Self>,
-{
-    type RpcBlock = alloy_rpc_types::Block;
-
-    fn rpc_to_primitive_block(rpc_block: Self::RpcBlock) -> HlBlock {
-        let alloy_rpc_types::Block { header, transactions, withdrawals, .. } = rpc_block;
-        HlBlock {
-            header: header.inner,
-            body: HlBlockBody {
-                inner: BlockBody {
-                    transactions: transactions
-                        .into_transactions()
-                        .map(|tx| TransactionSigned::Default(tx.inner.into_inner().into()))
-                        .collect(),
-                    ommers: Default::default(),
-                    withdrawals,
-                },
-                sidecars: None,
-                read_precompile_calls: None,
-                highest_precompile_address: None,
-            },
-        }
     }
 }

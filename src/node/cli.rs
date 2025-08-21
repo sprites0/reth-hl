@@ -1,8 +1,6 @@
 use crate::{
     chainspec::{parser::HlChainSpecParser, HlChainSpec},
-    node::{
-        consensus::HlConsensus, evm::config::HlEvmConfig, network::HlNetworkPrimitives, HlNode,
-    },
+    node::{consensus::HlConsensus, evm::config::HlEvmConfig, HlNode},
     pseudo_peer::BlockSourceArgs,
 };
 use clap::{Args, Parser};
@@ -11,7 +9,7 @@ use reth::{
     builder::{NodeBuilder, WithLaunchContext},
     cli::Commands,
     prometheus_exporter::install_prometheus_recorder,
-    version::{LONG_VERSION, SHORT_VERSION},
+    version::version_metadata,
     CliRunner,
 };
 use reth_chainspec::EthChainSpec;
@@ -21,10 +19,15 @@ use reth_db::DatabaseEnv;
 use reth_tracing::FileWorkerGuard;
 use std::{
     fmt::{self},
-    future::Future,
     sync::Arc,
 };
 use tracing::info;
+
+macro_rules! not_applicable {
+    ($command:ident) => {
+        todo!("{} is not applicable for HL", stringify!($command))
+    };
+}
 
 #[derive(Debug, Clone, Args)]
 #[non_exhaustive]
@@ -58,7 +61,7 @@ pub struct HlNodeArgs {
 ///
 /// This is the entrypoint to the executable.
 #[derive(Debug, Parser)]
-#[command(author, version = SHORT_VERSION, long_version = LONG_VERSION, about = "Reth", long_about = None)]
+#[command(author, version =version_metadata().short_version.as_ref(), long_version = version_metadata().long_version.as_ref(), about = "Reth", long_about = None)]
 pub struct Cli<Spec: ChainSpecParser = HlChainSpecParser, Ext: clap::Args + fmt::Debug = HlNodeArgs>
 {
     /// The command to run
@@ -78,20 +81,25 @@ where
     ///
     /// This accepts a closure that is used to launch the node via the
     /// [`NodeCommand`](reth_cli_commands::node::NodeCommand).
-    pub fn run<L, Fut>(self, launcher: L) -> eyre::Result<()>
-    where
-        L: FnOnce(WithLaunchContext<NodeBuilder<Arc<DatabaseEnv>, C::ChainSpec>>, Ext) -> Fut,
-        Fut: Future<Output = eyre::Result<()>>,
-    {
+    pub fn run(
+        self,
+        launcher: impl AsyncFnOnce(
+            WithLaunchContext<NodeBuilder<Arc<DatabaseEnv>, C::ChainSpec>>,
+            Ext,
+        ) -> eyre::Result<()>,
+    ) -> eyre::Result<()> {
         self.with_runner(CliRunner::try_default_runtime()?, launcher)
     }
 
     /// Execute the configured cli command with the provided [`CliRunner`].
-    pub fn with_runner<L, Fut>(mut self, runner: CliRunner, launcher: L) -> eyre::Result<()>
-    where
-        L: FnOnce(WithLaunchContext<NodeBuilder<Arc<DatabaseEnv>, C::ChainSpec>>, Ext) -> Fut,
-        Fut: Future<Output = eyre::Result<()>>,
-    {
+    pub fn with_runner(
+        mut self,
+        runner: CliRunner,
+        launcher: impl AsyncFnOnce(
+            WithLaunchContext<NodeBuilder<Arc<DatabaseEnv>, C::ChainSpec>>,
+            Ext,
+        ) -> eyre::Result<()>,
+    ) -> eyre::Result<()> {
         // Add network name if available to the logs dir
         if let Some(chain_spec) = self.command.chain_spec() {
             self.logs.log_file_directory =
@@ -119,11 +127,8 @@ where
             }
             Commands::DumpGenesis(command) => runner.run_blocking_until_ctrl_c(command.execute()),
             Commands::Db(command) => runner.run_blocking_until_ctrl_c(command.execute::<HlNode>()),
-            Commands::Stage(command) => runner.run_command_until_exit(|ctx| {
-                command.execute::<HlNode, _, _, HlNetworkPrimitives>(ctx, components)
-            }),
-            Commands::P2P(command) => {
-                runner.run_until_ctrl_c(command.execute::<HlNetworkPrimitives>())
+            Commands::Stage(command) => {
+                runner.run_command_until_exit(|ctx| command.execute::<HlNode, _>(ctx, components))
             }
             Commands::Config(command) => runner.run_until_ctrl_c(command.execute()),
             Commands::Recover(command) => {
@@ -131,17 +136,15 @@ where
             }
             Commands::Prune(command) => runner.run_until_ctrl_c(command.execute::<HlNode>()),
             Commands::Import(command) => {
-                runner.run_blocking_until_ctrl_c(command.execute::<HlNode, _, _>(components))
+                runner.run_blocking_until_ctrl_c(command.execute::<HlNode, _>(components))
             }
-            Commands::Debug(_command) => todo!(),
+            Commands::P2P(_command) => not_applicable!(P2P),
+            Commands::ImportEra(_command) => not_applicable!(ImportEra),
+            Commands::Download(_command) => not_applicable!(Download),
+            Commands::ExportEra(_) => not_applicable!(ExportEra),
+            Commands::ReExecute(_) => not_applicable!(ReExecute),
             #[cfg(feature = "dev")]
-            Commands::TestVectors(_command) => todo!(),
-            Commands::ImportEra(_command) => {
-                todo!()
-            }
-            Commands::Download(_command) => {
-                todo!()
-            }
+            Commands::TestVectors(_command) => not_applicable!(TestVectors),
         }
     }
 

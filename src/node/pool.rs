@@ -27,10 +27,11 @@ use reth_ethereum_primitives::PooledTransactionVariant;
 use reth_primitives::Recovered;
 use reth_primitives_traits::InMemorySize;
 use reth_transaction_pool::{
-    error::InvalidPoolTransactionError, AllPoolTransactions, AllTransactionsEvents,
-    BestTransactions, BestTransactionsAttributes, BlobStoreError, BlockInfo, EthPoolTransaction,
-    GetPooledTransactionLimit, NewBlobSidecar, NewTransactionEvent, PropagatedTransactions,
-    TransactionEvents, TransactionListenerKind, ValidPoolTransaction,
+    error::InvalidPoolTransactionError, pool::AddedTransactionState, AddedTransactionOutcome,
+    AllPoolTransactions, AllTransactionsEvents, BestTransactions, BestTransactionsAttributes,
+    BlobStoreError, BlockInfo, EthPoolTransaction, GetPooledTransactionLimit, NewBlobSidecar,
+    NewTransactionEvent, PropagatedTransactions, TransactionEvents, TransactionListenerKind,
+    ValidPoolTransaction,
 };
 use std::{collections::HashSet, sync::Arc};
 use tokio::sync::mpsc::{self, Receiver};
@@ -223,15 +224,18 @@ impl TransactionPool for HlTransactionPool {
         &self,
         _origin: TransactionOrigin,
         _transaction: Self::Transaction,
-    ) -> PoolResult<TxHash> {
-        Ok(TxHash::default())
+    ) -> PoolResult<AddedTransactionOutcome> {
+        Ok(AddedTransactionOutcome {
+            hash: TxHash::default(),
+            state: AddedTransactionState::Pending,
+        })
     }
 
     async fn add_transactions(
         &self,
         _origin: TransactionOrigin,
         _transactions: Vec<Self::Transaction>,
-    ) -> Vec<PoolResult<TxHash>> {
+    ) -> Vec<PoolResult<AddedTransactionOutcome>> {
         vec![]
     }
 
@@ -434,6 +438,21 @@ impl TransactionPool for HlTransactionPool {
         &self,
         _versioned_hashes: &[B256],
     ) -> Result<Option<Vec<BlobAndProofV2>>, BlobStoreError> {
+        unreachable!()
+    }
+
+    async fn add_transactions_with_origins(
+        &self,
+        _transactions: Vec<(TransactionOrigin, Self::Transaction)>,
+    ) -> Vec<PoolResult<AddedTransactionOutcome>> {
+        unreachable!()
+    }
+
+    fn pending_and_queued_txn_count(&self) -> (usize, usize) {
+        unreachable!()
+    }
+
+    fn all_transaction_hashes(&self) -> Vec<TxHash> {
         unreachable!()
     }
 }

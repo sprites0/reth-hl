@@ -1,8 +1,8 @@
 use alloy_eips::BlockId;
+use alloy_json_rpc::RpcObject;
 use alloy_primitives::{Bytes, U256};
 use alloy_rpc_types_eth::{
     state::{EvmOverrides, StateOverride},
-    transaction::TransactionRequest,
     BlockOverrides,
 };
 use jsonrpsee::{
@@ -12,16 +12,17 @@ use jsonrpsee::{
     types::{error::INTERNAL_ERROR_CODE, ErrorObject},
 };
 use jsonrpsee_core::{async_trait, client::ClientT, ClientError, RpcResult};
-use reth_rpc_eth_api::helpers::EthCall;
+use reth_rpc::eth::EthApiTypes;
+use reth_rpc_eth_api::{helpers::EthCall, RpcTxReq};
 
 #[rpc(server, namespace = "eth")]
-pub(crate) trait CallForwarderApi {
+pub(crate) trait CallForwarderApi<TxReq: RpcObject> {
     /// Executes a new message call immediately without creating a transaction on the block chain.
     #[method(name = "call")]
     async fn call(
         &self,
-        request: TransactionRequest,
-        block_number: Option<BlockId>,
+        request: TxReq,
+        block_id: Option<BlockId>,
         state_overrides: Option<StateOverride>,
         block_overrides: Option<Box<BlockOverrides>>,
     ) -> RpcResult<Bytes>;
@@ -31,8 +32,8 @@ pub(crate) trait CallForwarderApi {
     #[method(name = "estimateGas")]
     async fn estimate_gas(
         &self,
-        request: TransactionRequest,
-        block_number: Option<BlockId>,
+        request: TxReq,
+        block_id: Option<BlockId>,
         state_override: Option<StateOverride>,
     ) -> RpcResult<U256>;
 }
@@ -52,23 +53,24 @@ impl<EthApi> CallForwarderExt<EthApi> {
 }
 
 #[async_trait]
-impl<EthApi> CallForwarderApiServer for CallForwarderExt<EthApi>
+impl<EthApi> CallForwarderApiServer<RpcTxReq<<EthApi as EthApiTypes>::NetworkTypes>>
+    for CallForwarderExt<EthApi>
 where
     EthApi: EthCall + Send + Sync + 'static,
 {
     async fn call(
         &self,
-        request: TransactionRequest,
-        block_number: Option<BlockId>,
+        request: RpcTxReq<<EthApi as EthApiTypes>::NetworkTypes>,
+        block_id: Option<BlockId>,
         state_overrides: Option<StateOverride>,
         block_overrides: Option<Box<BlockOverrides>>,
     ) -> RpcResult<Bytes> {
-        let is_latest = block_number.as_ref().map(|b| b.is_latest()).unwrap_or(true);
+        let is_latest = block_id.as_ref().map(|b| b.is_latest()).unwrap_or(true);
         let result = if is_latest {
             self.upstream_client
                 .request(
                     "eth_call",
-                    rpc_params![request, block_number, state_overrides, block_overrides],
+                    rpc_params![request, block_id, state_overrides, block_overrides],
                 )
                 .await
                 .map_err(|e| match e {
@@ -83,7 +85,7 @@ where
             EthCall::call(
                 &self.eth_api,
                 request,
-                block_number,
+                block_id,
                 EvmOverrides::new(state_overrides, block_overrides),
             )
             .await
@@ -97,14 +99,14 @@ where
 
     async fn estimate_gas(
         &self,
-        request: TransactionRequest,
-        block_number: Option<BlockId>,
+        request: RpcTxReq<<EthApi as EthApiTypes>::NetworkTypes>,
+        block_id: Option<BlockId>,
         state_override: Option<StateOverride>,
     ) -> RpcResult<U256> {
-        let is_latest = block_number.as_ref().map(|b| b.is_latest()).unwrap_or(true);
+        let is_latest = block_id.as_ref().map(|b| b.is_latest()).unwrap_or(true);
         let result = if is_latest {
             self.upstream_client
-                .request("eth_estimateGas", rpc_params![request, block_number, state_override])
+                .request("eth_estimateGas", rpc_params![request, block_id, state_override])
                 .await
                 .map_err(|e| match e {
                     ClientError::Call(e) => e,
@@ -118,7 +120,7 @@ where
             EthCall::estimate_gas_at(
                 &self.eth_api,
                 request,
-                block_number.unwrap_or_default(),
+                block_id.unwrap_or_default(),
                 state_override,
             )
             .await
