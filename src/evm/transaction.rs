@@ -13,7 +13,7 @@ use revm::{
 #[auto_impl(&, &mut, Box, Arc)]
 pub trait HlTxTr: Transaction {}
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct HlTxEnv<T: Transaction> {
     pub base: T,
@@ -22,12 +22,6 @@ pub struct HlTxEnv<T: Transaction> {
 impl<T: Transaction> HlTxEnv<T> {
     pub fn new(base: T) -> Self {
         Self { base }
-    }
-}
-
-impl Default for HlTxEnv<TxEnv> {
-    fn default() -> Self {
-        Self { base: TxEnv::default() }
     }
 }
 

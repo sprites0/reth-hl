@@ -4,8 +4,6 @@ use std::str::FromStr;
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, PartialOrd, Ord, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[allow(non_camel_case_types)]
-#[allow(clippy::upper_case_acronyms)]
 pub enum HlSpecId {
     #[default]
     V1, // V1

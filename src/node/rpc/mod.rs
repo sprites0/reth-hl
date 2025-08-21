@@ -6,12 +6,11 @@ use reth::{
         rpc::{EthApiBuilder, EthApiCtx},
         FullNodeComponents,
     },
-    primitives::EthereumHardforks,
     rpc::{
         eth::{core::EthApiInner, DevSigner, FullEthApiServer},
         server_types::eth::{
-            receipt::EthReceiptConverter,
-            EthApiError, EthStateCache, FeeHistoryCache, GasPriceOracle,
+            receipt::EthReceiptConverter, EthApiError, EthStateCache, FeeHistoryCache,
+            GasPriceOracle,
         },
     },
     tasks::{
@@ -20,7 +19,6 @@ use reth::{
     },
 };
 use reth_evm::ConfigureEvm;
-use reth_primitives::{NodePrimitives, Receipt};
 use reth_provider::{ChainSpecProvider, ProviderHeader, ProviderTx};
 use reth_rpc::RpcTypes;
 use reth_rpc_eth_api::{
@@ -41,7 +39,6 @@ pub mod engine_api;
 mod transaction;
 
 /// Container type `HlEthApi`
-#[allow(missing_debug_implementations)]
 pub(crate) struct HlEthApiInner<N: RpcNodeCore, Rpc: RpcConvert> {
     /// Gateway to node's core components.
     pub(crate) eth_api: EthApiInner<N, Rpc>,
@@ -242,18 +239,10 @@ impl<NetworkT> Default for HlEthApiBuilder<NetworkT> {
 
 impl<N, NetworkT> EthApiBuilder<N> for HlEthApiBuilder<NetworkT>
 where
-    N: FullNodeComponents<
-            Types: NodeTypes<ChainSpec: EthereumHardforks>,
-            Evm: ConfigureEvm<
-                NextBlockEnvCtx: BuildPendingEnv<HeaderTy<N::Types>>,
-                Primitives: NodePrimitives,
-            >,
-        > + RpcNodeCore<Primitives = PrimitivesTy<N::Types>>
-        + FullNodeTypes<
-            Types: NodeTypes<
-                Primitives: NodePrimitives<Receipt = Receipt>,
-                ChainSpec = HlChainSpec,
-            >,
+    N: FullNodeComponents<Types: NodeTypes<ChainSpec = HlChainSpec>>
+        + RpcNodeCore<
+            Primitives = PrimitivesTy<N::Types>,
+            Evm: ConfigureEvm<NextBlockEnvCtx: BuildPendingEnv<HeaderTy<N::Types>>>,
         >,
     NetworkT: RpcTypes,
     HlRpcConvert<N, NetworkT>: RpcConvert<Network = NetworkT, Primitives = PrimitivesTy<N::Types>>,
@@ -261,7 +250,6 @@ where
             Provider = <N as FullNodeTypes>::Provider,
             Pool = <N as FullNodeComponents>::Pool,
         > + AddDevSigners,
-    <<N as RpcNodeCore>::Evm as ConfigureEvm>::NextBlockEnvCtx: BuildPendingEnv<HeaderTy<N::Types>>,
 {
     type EthApi = HlEthApi<N, HlRpcConvert<N, NetworkT>>;
 

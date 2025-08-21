@@ -1,7 +1,7 @@
 use alloy_consensus::TxReceipt;
-use alloy_network::ReceiptResponse;
 use alloy_eips::{BlockId, BlockNumberOrTag};
 use alloy_json_rpc::RpcObject;
+use alloy_network::ReceiptResponse;
 use alloy_primitives::{B256, U256};
 use alloy_rpc_types::{
     pubsub::{Params, SubscriptionKind},
@@ -379,8 +379,8 @@ where
         let res =
             self.eth_api.block_transaction_count_by_hash(hash).instrument(engine_span!()).await?;
         Ok(res.map(|count| {
-            count
-                - U256::from(system_tx_count_for_block(&*self.eth_api, BlockId::Hash(hash.into())))
+            count -
+                U256::from(system_tx_count_for_block(&*self.eth_api, BlockId::Hash(hash.into())))
         }))
     }
 
@@ -408,12 +408,7 @@ where
         trace!(target: "rpc::eth", ?block_id, "Serving eth_getBlockReceipts");
         let res = self.eth_api.block_receipts(block_id).instrument(engine_span!()).await?;
         Ok(res.map(|receipts| {
-            receipts
-                .into_iter()
-                .filter(|receipt| {
-                    receipt.cumulative_gas_used() > 0
-                })
-                .collect()
+            receipts.into_iter().filter(|receipt| receipt.cumulative_gas_used() > 0).collect()
         }))
     }
 }

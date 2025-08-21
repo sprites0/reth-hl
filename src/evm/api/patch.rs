@@ -22,7 +22,8 @@ macro_rules! _count {
     ($($arg:tt)*) => { _count!(@count $($arg)*) };
 }
 
-/// Pops n values from the stack and returns the top value. Fails the instruction if n values can't be popped.
+/// Pops n values from the stack and returns the top value. Fails the instruction if n values can't
+/// be popped.
 #[macro_export]
 #[collapse_debuginfo(yes)]
 macro_rules! popn_top {
@@ -62,7 +63,8 @@ pub fn blockhash_returning_placeholder<WIRE: InterpreterTypes, H: Host + ?Sized>
     }
 
     *number = if diff <= BLOCK_HASH_HISTORY {
-        // NOTE: This is HL-specific modifcation that returns the placeholder hash before specific block.
+        // NOTE: This is HL-specific modifcation that returns the placeholder hash before specific
+        // block.
         let hash = keccak256(as_u64_saturated!(requested_number).to_string().as_bytes());
         U256::from_be_bytes(hash.0)
     } else {

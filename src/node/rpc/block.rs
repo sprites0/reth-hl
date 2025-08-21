@@ -1,14 +1,12 @@
-
 use crate::node::rpc::HlEthApi;
-use reth::{
-    rpc::server_types::eth::{
-        builder::config::PendingBlockKind, error::FromEvmError, EthApiError, PendingBlock,
-    },
+use reth::rpc::server_types::eth::{
+    builder::config::PendingBlockKind, error::FromEvmError, EthApiError, PendingBlock,
 };
 use reth_rpc_eth_api::{
     helpers::{
         pending_block::PendingEnvBuilder, EthBlocks, LoadBlock, LoadPendingBlock, LoadReceipt,
-    }, RpcConvert, RpcNodeCore
+    },
+    RpcConvert, RpcNodeCore,
 };
 
 impl<N, Rpc> EthBlocks for HlEthApi<N, Rpc>
@@ -17,7 +15,6 @@ where
     EthApiError: FromEvmError<N::Evm>,
     Rpc: RpcConvert<Primitives = N::Primitives, Error = EthApiError>,
 {
-
 }
 
 impl<N, Rpc> LoadBlock for HlEthApi<N, Rpc>
