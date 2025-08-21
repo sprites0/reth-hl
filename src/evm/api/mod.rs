@@ -12,6 +12,8 @@ use revm::{
     Inspector,
 };
 
+use crate::chainspec::MAINNET_CHAIN_ID;
+
 pub mod builder;
 pub mod ctx;
 mod exec;
@@ -31,7 +33,9 @@ impl<CTX: ContextTr, INSP>
         let mut instruction = EthInstructions::new_mainnet();
 
         const NON_PLACEHOLDER_BLOCK_HASH_HEIGHT: u64 = 243_538;
-        if ctx.chain_id() == 999 && ctx.block_number() < NON_PLACEHOLDER_BLOCK_HASH_HEIGHT {
+        if ctx.chain_id() == MAINNET_CHAIN_ID &&
+            ctx.block_number() < NON_PLACEHOLDER_BLOCK_HASH_HEIGHT
+        {
             instruction.insert_instruction(
                 BLOCKHASH,
                 Instruction::new(patch::blockhash_returning_placeholder, 20),
