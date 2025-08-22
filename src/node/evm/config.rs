@@ -415,14 +415,19 @@ impl ConfigureEngineEvm<HlExecutionData> for HlEvmConfig {
     }
 
     fn context_for_payload<'a>(&self, payload: &'a HlExecutionData) -> ExecutionCtxFor<'a, Self> {
+        let block = &payload.0;
+        let extras = HlExtras {
+            read_precompile_calls: block.body.read_precompile_calls.clone(),
+            highest_precompile_address: block.body.highest_precompile_address,
+        };
         HlBlockExecutionCtx {
             ctx: EthBlockExecutionCtx {
-                parent_hash: payload.0.header.parent_hash,
-                parent_beacon_block_root: payload.0.header.parent_beacon_block_root,
-                ommers: &payload.0.body.ommers,
-                withdrawals: payload.0.body.withdrawals.as_ref().map(Cow::Borrowed),
+                parent_hash: block.header.parent_hash,
+                parent_beacon_block_root: block.header.parent_beacon_block_root,
+                ommers: &block.body.ommers,
+                withdrawals: block.body.withdrawals.as_ref().map(Cow::Borrowed),
             },
-            extras: HlExtras::default(),
+            extras,
         }
     }
 
