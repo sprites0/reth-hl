@@ -1,8 +1,7 @@
-use super::{
-    consts::DEFAULT_S3_BUCKET,
-    sources::{
-        BlockSourceBoxed, CachedBlockSource, HlNodeBlockSource, LocalBlockSource, S3BlockSource,
-    },
+use crate::chainspec::HlChainSpec;
+
+use super::sources::{
+    BlockSourceBoxed, CachedBlockSource, HlNodeBlockSource, LocalBlockSource, S3BlockSource,
 };
 use aws_config::BehaviorVersion;
 use std::{env::home_dir, path::PathBuf, sync::Arc};
@@ -15,16 +14,14 @@ pub struct BlockSourceConfig {
 
 #[derive(Debug, Clone)]
 pub enum BlockSourceType {
+    S3Default,
     S3 { bucket: String },
     Local { path: PathBuf },
 }
 
 impl BlockSourceConfig {
     pub async fn s3_default() -> Self {
-        Self {
-            source_type: BlockSourceType::S3 { bucket: DEFAULT_S3_BUCKET.to_string() },
-            block_source_from_node: None,
-        }
+        Self { source_type: BlockSourceType::S3Default, block_source_from_node: None }
     }
 
     pub async fn s3(bucket: String) -> Self {
@@ -53,17 +50,10 @@ impl BlockSourceConfig {
         self
     }
 
-    pub async fn create_block_source(&self) -> BlockSourceBoxed {
+    pub async fn create_block_source(&self, chain_spec: HlChainSpec) -> BlockSourceBoxed {
         match &self.source_type {
-            BlockSourceType::S3 { bucket } => {
-                let client = aws_sdk_s3::Client::new(
-                    &aws_config::defaults(BehaviorVersion::latest())
-                        .region("ap-northeast-1")
-                        .load()
-                        .await,
-                );
-                Arc::new(Box::new(S3BlockSource::new(client, bucket.clone())))
-            }
+            BlockSourceType::S3Default => s3_block_source(chain_spec.official_s3_bucket()).await,
+            BlockSourceType::S3 { bucket } => s3_block_source(bucket).await,
             BlockSourceType::Local { path } => {
                 Arc::new(Box::new(LocalBlockSource::new(path.clone())))
             }
@@ -89,10 +79,21 @@ impl BlockSourceConfig {
         ))
     }
 
-    pub async fn create_cached_block_source(&self, next_block_number: u64) -> BlockSourceBoxed {
-        let block_source = self.create_block_source().await;
+    pub async fn create_cached_block_source(
+        &self,
+        chain_spec: HlChainSpec,
+        next_block_number: u64,
+    ) -> BlockSourceBoxed {
+        let block_source = self.create_block_source(chain_spec).await;
         let block_source =
             self.create_block_source_from_node(next_block_number, block_source).await;
         Arc::new(Box::new(CachedBlockSource::new(block_source)))
     }
+}
+
+async fn s3_block_source(bucket: impl AsRef<str>) -> BlockSourceBoxed {
+    let client = aws_sdk_s3::Client::new(
+        &aws_config::defaults(BehaviorVersion::latest()).region("ap-northeast-1").load().await,
+    );
+    Arc::new(Box::new(S3BlockSource::new(client, bucket.as_ref().to_string())))
 }

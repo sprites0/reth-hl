@@ -42,6 +42,7 @@ pub fn new_blockhash_cache() -> BlockHashCache {
 /// A block poller that polls blocks from `BlockSource` and sends them to the `block_tx`
 #[derive(Debug)]
 pub struct BlockPoller {
+    chain_id: u64,
     block_rx: mpsc::Receiver<(u64, BlockAndReceipts)>,
     task: JoinHandle<eyre::Result<()>>,
     blockhash_cache: BlockHashCache,
@@ -51,6 +52,7 @@ impl BlockPoller {
     const POLL_INTERVAL: Duration = Duration::from_millis(25);
 
     pub fn new_suspended<BS: BlockSource>(
+        chain_id: u64,
         block_source: BS,
         blockhash_cache: BlockHashCache,
     ) -> (Self, mpsc::Sender<()>) {
@@ -59,7 +61,7 @@ impl BlockPoller {
         let (block_tx, block_rx) = mpsc::channel(100);
         let block_tx_clone = block_tx.clone();
         let task = tokio::spawn(Self::task(start_rx, block_source, block_tx_clone));
-        (Self { block_rx, task, blockhash_cache: blockhash_cache.clone() }, start_tx)
+        (Self { chain_id, block_rx, task, blockhash_cache: blockhash_cache.clone() }, start_tx)
     }
 
     #[allow(unused)]
@@ -98,7 +100,7 @@ impl BlockImport<HlNewBlock> for BlockPoller {
         match Pin::new(&mut self.block_rx).poll_recv(_cx) {
             Poll::Ready(Some((number, block))) => {
                 debug!("Polled block: {}", number);
-                let reth_block = block.to_reth_block();
+                let reth_block = block.to_reth_block(self.chain_id);
                 let hash = reth_block.header.hash_slow();
                 self.blockhash_cache.write().insert(hash, number);
                 let td = U128::from(reth_block.header.difficulty);
@@ -167,6 +169,7 @@ impl<BS: BlockSource> PseudoPeer<BS> {
         &mut self,
         eth_req: IncomingEthRequest<HlNetworkPrimitives>,
     ) -> eyre::Result<()> {
+        let chain_id = self.chain_spec.inner.chain().id();
         match eth_req {
             IncomingEthRequest::GetBlockHeaders {
                 peer_id: _,
@@ -189,7 +192,7 @@ impl<BS: BlockSource> PseudoPeer<BS> {
                     }
                 }
                 .into_par_iter()
-                .map(|block| block.to_reth_block().header.clone())
+                .map(|block| block.to_reth_block(chain_id).header.clone())
                 .collect::<Vec<_>>();
 
                 let _ = response.send(Ok(BlockHeaders(block_headers)));
@@ -207,7 +210,7 @@ impl<BS: BlockSource> PseudoPeer<BS> {
                     .collect_blocks(numbers)
                     .await
                     .into_iter()
-                    .map(|block| block.to_reth_block().body)
+                    .map(|block| block.to_reth_block(chain_id).body)
                     .collect::<Vec<_>>();
 
                 let _ = response.send(Ok(BlockBodies(block_bodies)));

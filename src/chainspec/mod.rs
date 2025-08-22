@@ -152,4 +152,12 @@ impl HlChainSpec {
             _ => unreachable!("Unreachable since ChainSpecParser won't return other chains"),
         }
     }
+
+    pub fn official_s3_bucket(self) -> &'static str {
+        match self.inner.chain().id() {
+            MAINNET_CHAIN_ID => "hl-mainnet-evm-blocks",
+            TESTNET_CHAIN_ID => "hl-testnet-evm-blocks",
+            _ => unreachable!("Unreachable since ChainSpecParser won't return other chains"),
+        }
+    }
 }

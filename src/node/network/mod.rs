@@ -245,7 +245,7 @@ where
 
         ctx.task_executor().spawn_critical("pseudo peer", async move {
             let block_source =
-                block_source_config.create_cached_block_source(next_block_number).await;
+                block_source_config.create_cached_block_source((&*chain_spec).clone(), next_block_number).await;
             start_pseudo_peer(chain_spec, local_node_record.to_string(), block_source)
                 .await
                 .unwrap();
