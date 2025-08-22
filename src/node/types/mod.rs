@@ -7,7 +7,7 @@ use alloy_rlp::{Decodable, Encodable, RlpDecodable, RlpEncodable};
 use bytes::BufMut;
 use serde::{Deserialize, Serialize};
 
-use crate::{node::spot_meta::MAINNET_CHAIN_ID, HlBlock};
+use crate::{chainspec::MAINNET_CHAIN_ID, HlBlock};
 
 pub type ReadPrecompileCall = (Address, Vec<(ReadPrecompileInput, ReadPrecompileResult)>);
 
