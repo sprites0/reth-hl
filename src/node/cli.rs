@@ -1,6 +1,6 @@
 use crate::{
     chainspec::{parser::HlChainSpecParser, HlChainSpec},
-    node::{consensus::HlConsensus, evm::config::HlEvmConfig, HlNode},
+    node::{consensus::HlConsensus, evm::config::HlEvmConfig, storage::tables::Tables, HlNode},
     pseudo_peer::BlockSourceArgs,
 };
 use clap::{Args, Parser};
@@ -14,8 +14,8 @@ use reth::{
 };
 use reth_chainspec::EthChainSpec;
 use reth_cli::chainspec::ChainSpecParser;
-use reth_cli_commands::launcher::FnLauncher;
-use reth_db::DatabaseEnv;
+use reth_cli_commands::{common::EnvironmentArgs, launcher::FnLauncher};
+use reth_db::{init_db, mdbx::init_db_for, DatabaseEnv};
 use reth_tracing::FileWorkerGuard;
 use std::{
     fmt::{self},
@@ -123,6 +123,8 @@ where
                 runner.run_blocking_until_ctrl_c(command.execute::<HlNode>())
             }
             Commands::InitState(command) => {
+                // Need to invoke `init_db_for` to create `BlockReadPrecompileCalls` table
+                Self::init_db(&command.env)?;
                 runner.run_blocking_until_ctrl_c(command.execute::<HlNode>())
             }
             Commands::DumpGenesis(command) => runner.run_blocking_until_ctrl_c(command.execute()),
@@ -155,5 +157,13 @@ where
     pub fn init_tracing(&self) -> eyre::Result<Option<FileWorkerGuard>> {
         let guard = self.logs.init_tracing()?;
         Ok(guard)
+    }
+
+    fn init_db(env: &EnvironmentArgs<C>) -> eyre::Result<()> {
+        let data_dir = env.datadir.clone().resolve_datadir(env.chain.chain());
+        let db_path = data_dir.db();
+        init_db(db_path.clone(), env.db.database_args())?;
+        init_db_for::<_, Tables>(db_path, env.db.database_args())?;
+        Ok(())
     }
 }
