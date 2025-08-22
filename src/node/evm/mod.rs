@@ -12,7 +12,7 @@ use reth::{
     api::FullNodeTypes,
     builder::{components::ExecutorBuilder, BuilderContext},
 };
-use reth_evm::{Evm, EvmEnv};
+use reth_evm::{Database, Evm, EvmEnv};
 use revm::{
     context::{
         result::{EVMError, ExecutionResult, HaltReason, Output, ResultAndState, SuccessReason},
@@ -21,7 +21,7 @@ use revm::{
     handler::{instructions::EthInstructions, EthPrecompiles, PrecompileProvider},
     interpreter::{interpreter::EthInterpreter, InterpreterResult},
     state::EvmState,
-    Context, Database, ExecuteEvm, InspectEvm, Inspector,
+    Context, ExecuteEvm, InspectEvm, Inspector,
 };
 use std::ops::{Deref, DerefMut};
 
@@ -75,7 +75,6 @@ where
     DB: Database,
     I: Inspector<HlContext<DB>>,
     P: PrecompileProvider<HlContext<DB>, Output = InterpreterResult>,
-    <DB as revm::Database>::Error: std::marker::Send + std::marker::Sync + 'static,
 {
     type DB = DB;
     type Tx = HlTxEnv<TxEnv>;
@@ -127,10 +126,6 @@ where
         ))
     }
 
-    fn db_mut(&mut self) -> &mut Self::DB {
-        &mut self.journaled_state.database
-    }
-
     fn finish(self) -> (Self::DB, EvmEnv<Self::Spec>) {
         let Context { block: block_env, cfg: cfg_env, journaled_state, .. } = self.inner.0.ctx;
 
@@ -141,20 +136,20 @@ where
         self.inspect = enabled;
     }
 
-    fn precompiles_mut(&mut self) -> &mut Self::Precompiles {
-        &mut self.inner.0.precompiles
+    fn components(&self) -> (&Self::DB, &Self::Inspector, &Self::Precompiles) {
+        (
+            &self.inner.0.ctx.journaled_state.database,
+            &self.inner.0.inspector,
+            &self.inner.0.precompiles,
+        )
     }
 
-    fn inspector_mut(&mut self) -> &mut Self::Inspector {
-        &mut self.inner.0.inspector
-    }
-
-    fn precompiles(&self) -> &Self::Precompiles {
-        &self.inner.0.precompiles
-    }
-
-    fn inspector(&self) -> &Self::Inspector {
-        &self.inner.0.inspector
+    fn components_mut(&mut self) -> (&mut Self::DB, &mut Self::Inspector, &mut Self::Precompiles) {
+        (
+            &mut self.inner.0.ctx.journaled_state.database,
+            &mut self.inner.0.inspector,
+            &mut self.inner.0.precompiles,
+        )
     }
 }
 

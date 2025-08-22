@@ -1,4 +1,5 @@
 use crate::{hardforks::HlHardforks, node::HlNode, HlBlock, HlBlockBody, HlPrimitives};
+use alloy_consensus::Header;
 use reth::{
     api::FullNodeTypes,
     beacon_consensus::EthBeaconConsensus,
@@ -39,7 +40,10 @@ pub struct HlConsensus<ChainSpec> {
     chain_spec: Arc<ChainSpec>,
 }
 
-impl<ChainSpec: EthChainSpec + HlHardforks> HlConsensus<ChainSpec> {
+impl<ChainSpec> HlConsensus<ChainSpec>
+where
+    ChainSpec: EthChainSpec + HlHardforks,
+{
     /// Create a new instance of [`HlConsensus`]
     pub fn new(chain_spec: Arc<ChainSpec>) -> Self {
         Self { inner: EthBeaconConsensus::new(chain_spec.clone()), chain_spec }
@@ -62,15 +66,19 @@ pub fn validate_against_parent_timestamp<H: BlockHeader>(
     Ok(())
 }
 
-impl<ChainSpec: EthChainSpec + HlHardforks> HeaderValidator for HlConsensus<ChainSpec> {
-    fn validate_header(&self, header: &SealedHeader) -> Result<(), ConsensusError> {
+impl<H, ChainSpec> HeaderValidator<H> for HlConsensus<ChainSpec>
+where
+    H: BlockHeader,
+    ChainSpec: EthChainSpec<Header = H> + HlHardforks,
+{
+    fn validate_header(&self, header: &SealedHeader<H>) -> Result<(), ConsensusError> {
         self.inner.validate_header(header)
     }
 
     fn validate_header_against_parent(
         &self,
-        header: &SealedHeader,
-        parent: &SealedHeader,
+        header: &SealedHeader<H>,
+        parent: &SealedHeader<H>,
     ) -> Result<(), ConsensusError> {
         validate_against_parent_hash_number(header.header(), parent)?;
 
@@ -83,7 +91,7 @@ impl<ChainSpec: EthChainSpec + HlHardforks> HeaderValidator for HlConsensus<Chai
         // )?;
 
         // ensure that the blob gas fields for this block
-        if let Some(blob_params) = self.chain_spec.blob_params_at_timestamp(header.timestamp) {
+        if let Some(blob_params) = self.chain_spec.blob_params_at_timestamp(header.timestamp()) {
             validate_against_parent_4844(header.header(), parent.header(), blob_params)?;
         }
 
@@ -91,7 +99,10 @@ impl<ChainSpec: EthChainSpec + HlHardforks> HeaderValidator for HlConsensus<Chai
     }
 }
 
-impl<ChainSpec: EthChainSpec + HlHardforks> Consensus<HlBlock> for HlConsensus<ChainSpec> {
+impl<ChainSpec> Consensus<HlBlock> for HlConsensus<ChainSpec>
+where
+    ChainSpec: EthChainSpec<Header = Header> + HlHardforks,
+{
     type Error = ConsensusError;
 
     fn validate_body_against_header(
@@ -135,8 +146,9 @@ impl<ChainSpec: EthChainSpec + HlHardforks> Consensus<HlBlock> for HlConsensus<C
 
 mod reth_copy;
 
-impl<ChainSpec: EthChainSpec<Header = alloy_consensus::Header> + HlHardforks>
-    FullConsensus<HlPrimitives> for HlConsensus<ChainSpec>
+impl<ChainSpec> FullConsensus<HlPrimitives> for HlConsensus<ChainSpec>
+where
+    ChainSpec: EthChainSpec<Header = Header> + HlHardforks,
 {
     fn validate_block_post_execution(
         &self,

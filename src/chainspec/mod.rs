@@ -15,6 +15,9 @@ use reth_discv4::NodeRecord;
 use reth_evm::eth::spec::EthExecutorSpec;
 use std::{fmt::Display, sync::Arc};
 
+pub const MAINNET_CHAIN_ID: u64 = 999;
+pub const TESTNET_CHAIN_ID: u64 = 998;
+
 /// Hl chain spec type.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct HlChainSpec {
@@ -144,8 +147,8 @@ impl HlChainSpec {
 
     pub fn official_rpc_url(&self) -> &'static str {
         match self.inner.chain().id() {
-            999 => Self::MAINNET_RPC_URL,
-            998 => Self::TESTNET_RPC_URL,
+            MAINNET_CHAIN_ID => Self::MAINNET_RPC_URL,
+            TESTNET_CHAIN_ID => Self::TESTNET_RPC_URL,
             _ => unreachable!("Unreachable since ChainSpecParser won't return other chains"),
         }
     }

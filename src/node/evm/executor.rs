@@ -72,7 +72,7 @@ fn run_precompile(
 
     match *get {
         ReadPrecompileResult::Ok { gas_used, ref bytes } => {
-            Ok(PrecompileOutput { gas_used, bytes: bytes.clone() })
+            Ok(PrecompileOutput { gas_used, bytes: bytes.clone(), reverted: false })
         }
         ReadPrecompileResult::OutOfGas => {
             // Use all the gas passed to this precompile
@@ -181,7 +181,7 @@ where
         // Execute transaction.
         let ResultAndState { result, mut state } = self
             .evm
-            .transact(tx)
+            .transact(&tx)
             .map_err(|err| BlockExecutionError::evm(err, tx.tx().trie_hash()))?;
 
         if !f(&result).should_commit() {

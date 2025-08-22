@@ -91,7 +91,8 @@ impl BlockSourceConfig {
 
     pub async fn create_cached_block_source(&self, next_block_number: u64) -> BlockSourceBoxed {
         let block_source = self.create_block_source().await;
-        let block_source = self.create_block_source_from_node(next_block_number, block_source).await;
+        let block_source =
+            self.create_block_source_from_node(next_block_number, block_source).await;
         Arc::new(Box::new(CachedBlockSource::new(block_source)))
     }
 }

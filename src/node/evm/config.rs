@@ -6,12 +6,13 @@ use crate::{
     node::{
         evm::{executor::is_system_transaction, receipt_builder::RethReceiptBuilder},
         primitives::{BlockBody, TransactionSigned},
+        rpc::engine_api::validator::HlExecutionData,
         types::HlExtras,
     },
     HlBlock, HlBlockBody, HlPrimitives,
 };
 use alloy_consensus::{BlockHeader, Header, Transaction as _, TxReceipt, EMPTY_OMMER_ROOT_HASH};
-use alloy_eips::merge::BEACON_NONCE;
+use alloy_eips::{merge::BEACON_NONCE, Encodable2718};
 use alloy_primitives::{Log, U256};
 use reth_chainspec::{EthChainSpec, EthereumHardforks, Hardforks};
 use reth_evm::{
@@ -19,12 +20,13 @@ use reth_evm::{
     eth::{receipt_builder::ReceiptBuilder, EthBlockExecutionCtx},
     execute::{BlockAssembler, BlockAssemblerInput},
     precompiles::PrecompilesMap,
-    ConfigureEvm, EvmEnv, EvmFactory, ExecutionCtxFor, FromRecoveredTx, FromTxWithEncoded,
-    IntoTxEnv, NextBlockEnvAttributes,
+    ConfigureEngineEvm, ConfigureEvm, EvmEnv, EvmEnvFor, EvmFactory, ExecutableTxIterator,
+    ExecutionCtxFor, FromRecoveredTx, FromTxWithEncoded, IntoTxEnv, NextBlockEnvAttributes,
 };
 use reth_evm_ethereum::EthBlockAssembler;
+use reth_payload_primitives::NewPayloadError;
 use reth_primitives::{logs_bloom, BlockTy, HeaderTy, Receipt, SealedBlock, SealedHeader};
-use reth_primitives_traits::proofs;
+use reth_primitives_traits::{proofs, SignerRecoverable, WithEncoded};
 use reth_provider::BlockExecutionResult;
 use reth_revm::State;
 use revm::{
@@ -404,6 +406,34 @@ where
             // TODO: hacky, double check if this is correct
             extras: HlExtras::default(),
         }
+    }
+}
+
+impl ConfigureEngineEvm<HlExecutionData> for HlEvmConfig {
+    fn evm_env_for_payload(&self, payload: &HlExecutionData) -> EvmEnvFor<Self> {
+        self.evm_env(&payload.0.header)
+    }
+
+    fn context_for_payload<'a>(&self, payload: &'a HlExecutionData) -> ExecutionCtxFor<'a, Self> {
+        HlBlockExecutionCtx {
+            ctx: EthBlockExecutionCtx {
+                parent_hash: payload.0.header.parent_hash,
+                parent_beacon_block_root: payload.0.header.parent_beacon_block_root,
+                ommers: &payload.0.body.ommers,
+                withdrawals: payload.0.body.withdrawals.as_ref().map(Cow::Borrowed),
+            },
+            extras: HlExtras::default(),
+        }
+    }
+
+    fn tx_iterator_for_payload(
+        &self,
+        payload: &HlExecutionData,
+    ) -> impl ExecutableTxIterator<Self> {
+        payload.0.body.transactions.clone().into_iter().map(move |tx| {
+            let recovered = tx.try_into_recovered().map_err(NewPayloadError::other)?;
+            Ok::<_, NewPayloadError>(WithEncoded::new(recovered.encoded_2718().into(), recovered))
+        })
     }
 }
 

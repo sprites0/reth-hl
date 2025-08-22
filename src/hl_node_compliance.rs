@@ -1,36 +1,35 @@
-/// We need to override the following methods:
-/// Filter:
-/// - eth_getLogs
-/// - eth_subscribe
-///
-/// Block (handled by HlEthApi already):
-/// - eth_getBlockByNumber/eth_getBlockByHash
-/// - eth_getBlockReceipts
-use crate::HlBlock;
 use alloy_consensus::TxReceipt;
+use alloy_eips::{BlockId, BlockNumberOrTag};
+use alloy_json_rpc::RpcObject;
+use alloy_network::ReceiptResponse;
+use alloy_primitives::{B256, U256};
 use alloy_rpc_types::{
     pubsub::{Params, SubscriptionKind},
-    Filter, FilterChanges, FilterId, Log, PendingTransactionFilterKind,
+    BlockTransactions, Filter, FilterChanges, FilterId, Log, PendingTransactionFilterKind,
 };
-use jsonrpsee::{PendingSubscriptionSink, SubscriptionMessage, SubscriptionSink};
+use jsonrpsee::{proc_macros::rpc, PendingSubscriptionSink, SubscriptionMessage, SubscriptionSink};
 use jsonrpsee_core::{async_trait, RpcResult};
 use jsonrpsee_types::ErrorObject;
 use reth::{
     api::FullNodeComponents, builder::rpc::RpcContext, rpc::result::internal_rpc_err,
     tasks::TaskSpawner,
 };
-use reth_network::NetworkInfo;
-use reth_primitives::NodePrimitives;
-use reth_provider::{BlockIdReader, BlockReader, ReceiptProvider, TransactionsProvider};
+use reth_primitives_traits::BlockBody as _;
+use reth_provider::{BlockIdReader, BlockReader, BlockReaderIdExt, ReceiptProvider};
 use reth_rpc::{EthFilter, EthPubSub};
 use reth_rpc_eth_api::{
-    EthApiServer, EthFilterApiServer, EthPubSubApiServer, FullEthApiTypes, RpcBlock, RpcHeader,
-    RpcNodeCore, RpcNodeCoreExt, RpcReceipt, RpcTransaction, RpcTxReq,
+    EthApiServer, EthApiTypes, EthFilterApiServer, EthPubSubApiServer, FullEthApiTypes, RpcBlock,
+    RpcHeader, RpcNodeCore, RpcNodeCoreExt, RpcReceipt, RpcTransaction, RpcTxReq,
 };
 use serde::Serialize;
-use std::sync::Arc;
+use std::{marker::PhantomData, sync::Arc};
 use tokio_stream::{Stream, StreamExt};
-use tracing::trace;
+use tracing::{trace, Instrument};
+
+use crate::{
+    node::primitives::{HlPrimitives, TransactionSigned},
+    HlBlock,
+};
 
 pub trait EthWrapper:
     EthApiServer<
@@ -39,34 +38,25 @@ pub trait EthWrapper:
         RpcBlock<Self::NetworkTypes>,
         RpcReceipt<Self::NetworkTypes>,
         RpcHeader<Self::NetworkTypes>,
-    > + FullEthApiTypes
-    + RpcNodeCoreExt<
-        Provider: BlockIdReader + BlockReader<Block = HlBlock>,
-        Primitives: NodePrimitives<
-            SignedTx = <<Self as RpcNodeCore>::Provider as TransactionsProvider>::Transaction,
-        >,
-        Network: NetworkInfo,
-    > + 'static
+    > + FullEthApiTypes<Primitives = HlPrimitives>
+    + RpcNodeCoreExt<Provider: BlockReader<Block = HlBlock>>
+    + 'static
 {
 }
 
-impl <
-    T:
-        EthApiServer<
-            RpcTxReq<Self::NetworkTypes>,
-            RpcTransaction<Self::NetworkTypes>,
-            RpcBlock<Self::NetworkTypes>,
-            RpcReceipt<Self::NetworkTypes>,
-            RpcHeader<Self::NetworkTypes>,
-        > + FullEthApiTypes
-        + RpcNodeCoreExt<
-            Provider: BlockIdReader + BlockReader<Block = HlBlock>,
-            Primitives: NodePrimitives<
-                SignedTx = <<Self as RpcNodeCore>::Provider as TransactionsProvider>::Transaction,
-            >,
-            Network: NetworkInfo,
-        > + 'static
-> EthWrapper for T {
+impl<
+        T: EthApiServer<
+                RpcTxReq<Self::NetworkTypes>,
+                RpcTransaction<Self::NetworkTypes>,
+                RpcBlock<Self::NetworkTypes>,
+                RpcReceipt<Self::NetworkTypes>,
+                RpcHeader<Self::NetworkTypes>,
+            > + FullEthApiTypes<Primitives = HlPrimitives>
+            + RpcNodeCoreExt
+            + RpcNodeCore<Provider: BlockReader<Block = HlBlock>>
+            + 'static,
+    > EthWrapper for T
+{
 }
 
 pub struct HlNodeFilterHttp<Eth: EthWrapper> {
@@ -283,6 +273,146 @@ where
     }
 }
 
+pub struct HlNodeBlockFilterHttp<Eth: EthWrapper> {
+    eth_api: Arc<Eth>,
+    _marker: PhantomData<Eth>,
+}
+
+impl<Eth: EthWrapper> HlNodeBlockFilterHttp<Eth> {
+    pub fn new(eth_api: Arc<Eth>) -> Self {
+        Self { eth_api, _marker: PhantomData }
+    }
+}
+
+#[rpc(server, namespace = "eth")]
+pub trait EthBlockApi<B: RpcObject, R: RpcObject> {
+    /// Returns information about a block by hash.
+    #[method(name = "getBlockByHash")]
+    async fn block_by_hash(&self, hash: B256, full: bool) -> RpcResult<Option<B>>;
+
+    /// Returns information about a block by number.
+    #[method(name = "getBlockByNumber")]
+    async fn block_by_number(&self, number: BlockNumberOrTag, full: bool) -> RpcResult<Option<B>>;
+
+    /// Returns all transaction receipts for a given block.
+    #[method(name = "getBlockReceipts")]
+    async fn block_receipts(&self, block_id: BlockId) -> RpcResult<Option<Vec<R>>>;
+
+    #[method(name = "getBlockTransactionCountByHash")]
+    async fn block_transaction_count_by_hash(&self, hash: B256) -> RpcResult<Option<U256>>;
+
+    #[method(name = "getBlockTransactionCountByNumber")]
+    async fn block_transaction_count_by_number(
+        &self,
+        number: BlockNumberOrTag,
+    ) -> RpcResult<Option<U256>>;
+}
+
+macro_rules! engine_span {
+    () => {
+        tracing::trace_span!(target: "rpc", "engine")
+    };
+}
+
+fn is_system_tx(tx: &TransactionSigned) -> bool {
+    tx.is_system_transaction()
+}
+
+fn exclude_system_tx_from_block<Eth: EthWrapper>(
+    recovered_block: &RpcBlock<Eth::NetworkTypes>,
+    eth_api: &Eth,
+) -> RpcBlock<Eth::NetworkTypes> {
+    let system_tx_count = system_tx_count_for_block(eth_api, recovered_block.number().into());
+    let mut new_block = recovered_block.clone();
+
+    new_block.transactions = match new_block.transactions {
+        BlockTransactions::Full(mut transactions) => {
+            transactions.drain(..system_tx_count);
+            BlockTransactions::Full(transactions)
+        }
+        BlockTransactions::Hashes(mut hashes) => {
+            hashes.drain(..system_tx_count);
+            BlockTransactions::Hashes(hashes)
+        }
+        BlockTransactions::Uncle => BlockTransactions::Uncle,
+    };
+    new_block
+}
+
+fn system_tx_count_for_block<Eth: EthWrapper>(eth_api: &Eth, number: BlockId) -> usize {
+    let provider = eth_api.provider();
+    let block = provider.block_by_id(number).unwrap().unwrap();
+    let system_tx_count = block.body.transactions().iter().filter(|tx| is_system_tx(tx)).count();
+    system_tx_count
+}
+
+#[async_trait]
+impl<Eth: EthWrapper> EthBlockApiServer<RpcBlock<Eth::NetworkTypes>, RpcReceipt<Eth::NetworkTypes>>
+    for HlNodeBlockFilterHttp<Eth>
+where
+    Eth: EthApiTypes + 'static,
+{
+    /// Handler for: `eth_getBlockByHash`
+    async fn block_by_hash(
+        &self,
+        hash: B256,
+        full: bool,
+    ) -> RpcResult<Option<RpcBlock<Eth::NetworkTypes>>> {
+        let res = self.eth_api.block_by_hash(hash, full).instrument(engine_span!()).await?;
+        Ok(res.map(|block| exclude_system_tx_from_block(&block, &*self.eth_api)))
+    }
+
+    /// Handler for: `eth_getBlockByNumber`
+    async fn block_by_number(
+        &self,
+        number: BlockNumberOrTag,
+        full: bool,
+    ) -> RpcResult<Option<RpcBlock<Eth::NetworkTypes>>> {
+        trace!(target: "rpc::eth", ?number, ?full, "Serving eth_getBlockByNumber");
+        let res = self.eth_api.block_by_number(number, full).instrument(engine_span!()).await?;
+        Ok(res.map(|block| exclude_system_tx_from_block(&block, &*self.eth_api)))
+    }
+
+    /// Handler for: `eth_getBlockTransactionCountByHash`
+    async fn block_transaction_count_by_hash(&self, hash: B256) -> RpcResult<Option<U256>> {
+        trace!(target: "rpc::eth", ?hash, "Serving eth_getBlockTransactionCountByHash");
+        let res =
+            self.eth_api.block_transaction_count_by_hash(hash).instrument(engine_span!()).await?;
+        Ok(res.map(|count| {
+            count -
+                U256::from(system_tx_count_for_block(&*self.eth_api, BlockId::Hash(hash.into())))
+        }))
+    }
+
+    /// Handler for: `eth_getBlockTransactionCountByNumber`
+    async fn block_transaction_count_by_number(
+        &self,
+        number: BlockNumberOrTag,
+    ) -> RpcResult<Option<U256>> {
+        trace!(target: "rpc::eth", ?number, "Serving eth_getBlockTransactionCountByNumber");
+        let res = self
+            .eth_api
+            .block_transaction_count_by_number(number)
+            .instrument(engine_span!())
+            .await?;
+        Ok(res.map(|count| {
+            count - U256::from(system_tx_count_for_block(&*self.eth_api, number.into()))
+        }))
+    }
+
+    /// Handler for: `eth_getBlockReceipts`
+    async fn block_receipts(
+        &self,
+        block_id: BlockId,
+    ) -> RpcResult<Option<Vec<RpcReceipt<Eth::NetworkTypes>>>> {
+        trace!(target: "rpc::eth", ?block_id, "Serving eth_getBlockReceipts");
+        let res = self.eth_api.block_receipts(block_id).instrument(engine_span!()).await?;
+        Ok(res.map(|receipts| {
+            receipts.into_iter().filter(|receipt| receipt.cumulative_gas_used() > 0).collect()
+        }))
+    }
+}
+
 pub fn install_hl_node_compliance<Node, EthApi>(
     ctx: RpcContext<Node, EthApi>,
 ) -> Result<(), eyre::Error>
@@ -305,6 +435,10 @@ where
             Box::new(ctx.node().task_executor().clone()),
         )
         .into_rpc(),
+    )?;
+
+    ctx.modules.replace_configured(
+        HlNodeBlockFilterHttp::new(Arc::new(ctx.registry.eth_api().clone())).into_rpc(),
     )?;
     Ok(())
 }

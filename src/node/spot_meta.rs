@@ -3,8 +3,7 @@ use eyre::{Error, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-pub(crate) const MAINNET_CHAIN_ID: u64 = 999;
-pub(crate) const TESTNET_CHAIN_ID: u64 = 998;
+use crate::chainspec::{MAINNET_CHAIN_ID, TESTNET_CHAIN_ID};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct EvmContract {
