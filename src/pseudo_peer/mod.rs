@@ -50,6 +50,7 @@ pub async fn start_pseudo_peer(
 
     // Create network manager
     let (mut network, start_tx) = create_network_manager::<BlockSourceBoxed>(
+        (*chain_spec).clone(),
         destination_peer,
         block_source.clone(),
         blockhash_cache.clone(),

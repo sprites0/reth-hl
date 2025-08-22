@@ -19,6 +19,7 @@ pub struct NetworkBuilder {
     boot_nodes: Vec<TrustedPeer>,
     discovery_port: u16,
     listener_port: u16,
+    chain_spec: HlChainSpec,
 }
 
 impl Default for NetworkBuilder {
@@ -29,6 +30,7 @@ impl Default for NetworkBuilder {
             boot_nodes: vec![],
             discovery_port: 0,
             listener_port: 0,
+            chain_spec: HlChainSpec::default(),
         }
     }
 }
@@ -52,6 +54,11 @@ impl NetworkBuilder {
     pub fn with_ports(mut self, discovery_port: u16, listener_port: u16) -> Self {
         self.discovery_port = discovery_port;
         self.listener_port = listener_port;
+        self
+    }
+
+    pub fn with_chain_spec(mut self, chain_spec: HlChainSpec) -> Self {
+        self.chain_spec = chain_spec;
         self
     }
 
@@ -80,12 +87,14 @@ impl NetworkBuilder {
 }
 
 pub async fn create_network_manager<BS>(
+    chain_spec: HlChainSpec,
     destination_peer: String,
     block_source: Arc<Box<dyn super::sources::BlockSource>>,
     blockhash_cache: BlockHashCache,
 ) -> eyre::Result<(NetworkManager<HlNetworkPrimitives>, mpsc::Sender<()>)> {
     NetworkBuilder::default()
         .with_boot_nodes(vec![TrustedPeer::from_str(&destination_peer).unwrap()])
+        .with_chain_spec(chain_spec)
         .build::<BS>(block_source, blockhash_cache)
         .await
 }
