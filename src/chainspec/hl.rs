@@ -34,18 +34,28 @@ pub static HL_HARDFORKS: LazyLock<ChainHardforks> = LazyLock::new(|| {
     ])
 });
 
-/// The Hyperliqiud Mainnet spec
-pub fn hl_mainnet() -> ChainSpec {
+pub fn hl_chainspec(chain: Chain, genesis: &'static str) -> ChainSpec {
     ChainSpec {
-        chain: Chain::from_named(NamedChain::Hyperliquid),
-        genesis: serde_json::from_str(include_str!("genesis.json"))
-            .expect("Can't deserialize Hyperliquid Mainnet genesis json"),
+        chain,
+        genesis: serde_json::from_str(genesis).expect("Can't deserialize Hyperliquid genesis json"),
         genesis_header: empty_genesis_header(),
         paris_block_and_final_difficulty: Some((0, U256::from(0))),
         hardforks: HL_HARDFORKS.clone(),
         prune_delete_limit: 10000,
         ..Default::default()
     }
+}
+
+/// The Hyperliqiud Mainnet spec
+pub fn hl_mainnet() -> ChainSpec {
+    hl_chainspec(Chain::from_named(NamedChain::Hyperliquid), include_str!("genesis.json"))
+}
+
+/// The Hyperliqiud Testnet spec
+pub fn hl_testnet() -> ChainSpec {
+    // Note: Testnet sync starts from snapshotted state [1] instead of genesis block.
+    // So the `alloc` field is not used, which makes it fine to reuse mainnet genesis file.
+    hl_chainspec(Chain::from_id_unchecked(998), include_str!("genesis.json"))
 }
 
 /// Empty genesis header for Hyperliquid Mainnet.

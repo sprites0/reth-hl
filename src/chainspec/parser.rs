@@ -1,11 +1,11 @@
-use crate::chainspec::HlChainSpec;
+use crate::chainspec::{hl::hl_testnet, HlChainSpec};
 
 use super::hl::hl_mainnet;
 use reth_cli::chainspec::ChainSpecParser;
 use std::sync::Arc;
 
 /// Chains supported by HyperEVM. First value should be used as the default.
-pub const SUPPORTED_CHAINS: &[&str] = &["mainnet"];
+pub const SUPPORTED_CHAINS: &[&str] = &["mainnet", "testnet"];
 
 /// Hyperliquid chain specification parser.
 #[derive(Debug, Clone, Default)]
@@ -27,6 +27,7 @@ impl ChainSpecParser for HlChainSpecParser {
 pub fn chain_value_parser(s: &str) -> eyre::Result<Arc<HlChainSpec>> {
     match s {
         "mainnet" => Ok(Arc::new(HlChainSpec { inner: hl_mainnet() })),
+        "testnet" => Ok(Arc::new(HlChainSpec { inner: hl_testnet() })),
         _ => Err(eyre::eyre!("Unsupported chain: {}", s)),
     }
 }

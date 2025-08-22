@@ -1,9 +1,5 @@
 use super::service::{BlockHashCache, BlockPoller};
-use crate::{
-    chainspec::{parser::chain_value_parser, HlChainSpec},
-    node::network::HlNetworkPrimitives,
-    HlPrimitives,
-};
+use crate::{chainspec::HlChainSpec, node::network::HlNetworkPrimitives, HlPrimitives};
 use reth_network::{
     config::{rng_secret_key, SecretKey},
     NetworkConfig, NetworkManager, PeersConfig,
@@ -19,6 +15,7 @@ pub struct NetworkBuilder {
     boot_nodes: Vec<TrustedPeer>,
     discovery_port: u16,
     listener_port: u16,
+    chain_spec: HlChainSpec,
 }
 
 impl Default for NetworkBuilder {
@@ -29,6 +26,7 @@ impl Default for NetworkBuilder {
             boot_nodes: vec![],
             discovery_port: 0,
             listener_port: 0,
+            chain_spec: HlChainSpec::default(),
         }
     }
 }
@@ -55,6 +53,11 @@ impl NetworkBuilder {
         self
     }
 
+    pub fn with_chain_spec(mut self, chain_spec: HlChainSpec) -> Self {
+        self.chain_spec = chain_spec;
+        self
+    }
+
     pub async fn build<BS>(
         self,
         block_source: Arc<Box<dyn super::sources::BlockSource>>,
@@ -65,13 +68,15 @@ impl NetworkBuilder {
             .peer_config(self.peer_config)
             .discovery_port(self.discovery_port)
             .listener_port(self.listener_port);
+        let chain_id = self.chain_spec.inner.chain().id();
 
-        let (block_poller, start_tx) = BlockPoller::new_suspended(block_source, blockhash_cache);
+        let (block_poller, start_tx) =
+            BlockPoller::new_suspended(chain_id, block_source, blockhash_cache);
         let config = builder.block_import(Box::new(block_poller)).build(Arc::new(NoopProvider::<
             HlChainSpec,
             HlPrimitives,
         >::new(
-            chain_value_parser("mainnet").unwrap(),
+            self.chain_spec.into(),
         )));
 
         let network = NetworkManager::new(config).await.map_err(|e| eyre::eyre!(e))?;
@@ -80,12 +85,14 @@ impl NetworkBuilder {
 }
 
 pub async fn create_network_manager<BS>(
+    chain_spec: HlChainSpec,
     destination_peer: String,
     block_source: Arc<Box<dyn super::sources::BlockSource>>,
     blockhash_cache: BlockHashCache,
 ) -> eyre::Result<(NetworkManager<HlNetworkPrimitives>, mpsc::Sender<()>)> {
     NetworkBuilder::default()
         .with_boot_nodes(vec![TrustedPeer::from_str(&destination_peer).unwrap()])
+        .with_chain_spec(chain_spec)
         .build::<BS>(block_source, blockhash_cache)
         .await
 }

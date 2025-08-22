@@ -7,7 +7,7 @@ use alloy_rlp::{Decodable, Encodable, RlpDecodable, RlpEncodable};
 use bytes::BufMut;
 use serde::{Deserialize, Serialize};
 
-use crate::{chainspec::MAINNET_CHAIN_ID, HlBlock};
+use crate::HlBlock;
 
 pub type ReadPrecompileCall = (Address, Vec<(ReadPrecompileInput, ReadPrecompileResult)>);
 
@@ -50,13 +50,13 @@ pub struct BlockAndReceipts {
 }
 
 impl BlockAndReceipts {
-    pub fn to_reth_block(self) -> HlBlock {
+    pub fn to_reth_block(self, chain_id: u64) -> HlBlock {
         let EvmBlock::Reth115(block) = self.block;
         block.to_reth_block(
             self.read_precompile_calls.clone(),
             self.highest_precompile_address,
             self.system_txs.clone(),
-            MAINNET_CHAIN_ID,
+            chain_id,
         )
     }
 
