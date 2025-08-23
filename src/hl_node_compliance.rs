@@ -1,3 +1,12 @@
+//! Overrides for RPC methods to post-filter system transactions and logs.
+//!
+//!  System transactions are always at the beginning of the block,
+//! so we can use the transaction index to determine if the log is from a system transaction,
+//! and if it is, we can exclude it.
+//!
+//! For non-system transactions, we can just return the log as is, and the client will
+//! adjust the transaction index accordingly.
+
 use alloy_consensus::{transaction::TransactionMeta, TxReceipt};
 use alloy_eips::{BlockId, BlockNumberOrTag};
 use alloy_json_rpc::RpcObject;
@@ -48,20 +57,19 @@ pub trait EthWrapper:
 {
 }
 
-impl<
-        T: EthApiServer<
-                RpcTxReq<Self::NetworkTypes>,
-                RpcTransaction<Self::NetworkTypes>,
-                RpcBlock<Self::NetworkTypes>,
-                RpcReceipt<Self::NetworkTypes>,
-                RpcHeader<Self::NetworkTypes>,
-            > + FullEthApiTypes<Primitives = HlPrimitives>
-            + RpcNodeCoreExt<Provider: BlockReader<Block = HlBlock>>
-            + EthBlocks
-            + EthTransactions
-            + LoadReceipt
-            + 'static,
-    > EthWrapper for T
+impl<T> EthWrapper for T where
+    T: EthApiServer<
+            RpcTxReq<Self::NetworkTypes>,
+            RpcTransaction<Self::NetworkTypes>,
+            RpcBlock<Self::NetworkTypes>,
+            RpcReceipt<Self::NetworkTypes>,
+            RpcHeader<Self::NetworkTypes>,
+        > + FullEthApiTypes<Primitives = HlPrimitives>
+        + RpcNodeCoreExt<Provider: BlockReader<Block = HlBlock>>
+        + EthBlocks
+        + EthTransactions
+        + LoadReceipt
+        + 'static
 {
 }
 
@@ -80,19 +88,16 @@ impl<Eth: EthWrapper> HlNodeFilterHttp<Eth> {
 impl<Eth: EthWrapper> EthFilterApiServer<RpcTransaction<Eth::NetworkTypes>>
     for HlNodeFilterHttp<Eth>
 {
-    /// Handler for `eth_newFilter`
     async fn new_filter(&self, filter: Filter) -> RpcResult<FilterId> {
         trace!(target: "rpc::eth", "Serving eth_newFilter");
         self.filter.new_filter(filter).await
     }
 
-    /// Handler for `eth_newBlockFilter`
     async fn new_block_filter(&self) -> RpcResult<FilterId> {
         trace!(target: "rpc::eth", "Serving eth_newBlockFilter");
         self.filter.new_block_filter().await
     }
 
-    /// Handler for `eth_newPendingTransactionFilter`
     async fn new_pending_transaction_filter(
         &self,
         kind: Option<PendingTransactionFilterKind>,
@@ -101,7 +106,6 @@ impl<Eth: EthWrapper> EthFilterApiServer<RpcTransaction<Eth::NetworkTypes>>
         self.filter.new_pending_transaction_filter(kind).await
     }
 
-    /// Handler for `eth_getFilterChanges`
     async fn filter_changes(
         &self,
         id: FilterId,
@@ -110,31 +114,20 @@ impl<Eth: EthWrapper> EthFilterApiServer<RpcTransaction<Eth::NetworkTypes>>
         self.filter.filter_changes(id).await.map_err(ErrorObject::from)
     }
 
-    /// Returns an array of all logs matching filter with given id.
-    ///
-    /// Returns an error if no matching log filter exists.
-    ///
-    /// Handler for `eth_getFilterLogs`
     async fn filter_logs(&self, id: FilterId) -> RpcResult<Vec<Log>> {
         trace!(target: "rpc::eth", "Serving eth_getFilterLogs");
         self.filter.filter_logs(id).await.map_err(ErrorObject::from)
     }
 
-    /// Handler for `eth_uninstallFilter`
     async fn uninstall_filter(&self, id: FilterId) -> RpcResult<bool> {
         trace!(target: "rpc::eth", "Serving eth_uninstallFilter");
         self.filter.uninstall_filter(id).await
     }
 
-    /// Returns logs matching given filter object.
-    ///
-    /// Handler for `eth_getLogs`
     async fn logs(&self, filter: Filter) -> RpcResult<Vec<Log>> {
         trace!(target: "rpc::eth", "Serving eth_getLogs");
         let logs = EthFilterApiServer::logs(&*self.filter, filter).await?;
-        let provider = self.provider.clone();
-
-        Ok(logs.into_iter().filter_map(|log| adjust_log::<Eth>(log, &provider)).collect())
+        Ok(logs.into_iter().filter_map(|log| adjust_log::<Eth>(log, &self.provider)).collect())
     }
 }
 
@@ -158,7 +151,6 @@ impl<Eth: EthWrapper> HlNodeFilterWs<Eth> {
 impl<Eth: EthWrapper> EthPubSubApiServer<RpcTransaction<Eth::NetworkTypes>>
     for HlNodeFilterWs<Eth>
 {
-    /// Handler for `eth_subscribe`
     async fn subscribe(
         &self,
         pending: PendingSubscriptionSink,
@@ -166,16 +158,12 @@ impl<Eth: EthWrapper> EthPubSubApiServer<RpcTransaction<Eth::NetworkTypes>>
         params: Option<Params>,
     ) -> jsonrpsee::core::SubscriptionResult {
         let sink = pending.accept().await?;
-        let pubsub = self.pubsub.clone();
-        let provider = self.provider.clone();
+        let (pubsub, provider) = (self.pubsub.clone(), self.provider.clone());
         self.subscription_task_spawner.spawn(Box::pin(async move {
             if kind == SubscriptionKind::Logs {
-                // if no params are provided, used default filter params
                 let filter = match params {
-                    Some(Params::Logs(filter)) => *filter,
-                    Some(Params::Bool(_)) => {
-                        return;
-                    }
+                    Some(Params::Logs(f)) => *f,
+                    Some(Params::Bool(_)) => return,
                     _ => Default::default(),
                 };
                 let _ = pipe_from_stream(
@@ -185,46 +173,30 @@ impl<Eth: EthWrapper> EthPubSubApiServer<RpcTransaction<Eth::NetworkTypes>>
                 .await;
             } else {
                 let _ = pubsub.handle_accepted(sink, kind, params).await;
-            };
+            }
         }));
-
         Ok(())
     }
 }
 
 fn adjust_log<Eth: EthWrapper>(mut log: Log, provider: &Eth::Provider) -> Option<Log> {
-    let transaction_index = log.transaction_index?;
-    let log_index = log.log_index?;
-
+    let (tx_idx, log_idx) = (log.transaction_index?, log.log_index?);
     let receipts = provider.receipts_by_block(log.block_number?.into()).unwrap()?;
-
-    // System transactions are always at the beginning of the block,
-    // so we can use the transaction index to determine if the log is from a system transaction,
-    // and if it is, we can exclude it.
-    //
-    // For non-system transactions, we can just return the log as is, and the client will
-    // adjust the transaction index accordingly.
-    let mut system_tx_count = 0u64;
-    let mut system_tx_logs_count = 0u64;
-
+    let (mut sys_tx_count, mut sys_log_count) = (0u64, 0u64);
     for receipt in receipts {
-        let is_system_tx = receipt.cumulative_gas_used() == 0;
-        if is_system_tx {
-            system_tx_count += 1;
-            system_tx_logs_count += receipt.logs().len() as u64;
+        if receipt.cumulative_gas_used() == 0 {
+            sys_tx_count += 1;
+            sys_log_count += receipt.logs().len() as u64;
         }
     }
-
-    if system_tx_count > transaction_index {
+    if sys_tx_count > tx_idx {
         return None;
     }
-
-    log.transaction_index = Some(transaction_index - system_tx_count);
-    log.log_index = Some(log_index - system_tx_logs_count);
+    log.transaction_index = Some(tx_idx - sys_tx_count);
+    log.log_index = Some(log_idx - sys_log_count);
     Some(log)
 }
 
-/// Helper to convert a serde error into an [`ErrorObject`]
 #[derive(Debug, thiserror::Error)]
 #[error("Failed to serialize subscription item: {0}")]
 pub struct SubscriptionSerializeError(#[from] serde_json::Error);
@@ -241,37 +213,18 @@ impl From<SubscriptionSerializeError> for ErrorObject<'static> {
     }
 }
 
-async fn pipe_from_stream<T, St>(
+async fn pipe_from_stream<T: Serialize, St: Stream<Item = T> + Unpin>(
     sink: SubscriptionSink,
     mut stream: St,
-) -> Result<(), ErrorObject<'static>>
-where
-    St: Stream<Item = T> + Unpin,
-    T: Serialize,
-{
+) -> Result<(), ErrorObject<'static>> {
     loop {
         tokio::select! {
-            _ = sink.closed() => {
-                // connection dropped
-                break Ok(())
-            },
+            _ = sink.closed() => break Ok(()),
             maybe_item = stream.next() => {
-                let item = match maybe_item {
-                    Some(item) => item,
-                    None => {
-                        // stream ended
-                        break  Ok(())
-                    },
-                };
-                let msg = SubscriptionMessage::new(
-                    sink.method_name(),
-                    sink.subscription_id(),
-                    &item
-                ).map_err(SubscriptionSerializeError::new)?;
-
-                if sink.send(msg).await.is_err() {
-                    break Ok(());
-                }
+                let Some(item) = maybe_item else { break Ok(()) };
+                let msg = SubscriptionMessage::new(sink.method_name(), sink.subscription_id(), &item)
+                    .map_err(SubscriptionSerializeError::new)?;
+                if sink.send(msg).await.is_err() { break Ok(()); }
             }
         }
     }
@@ -410,7 +363,8 @@ async fn adjust_transaction_receipt<Eth: EthWrapper>(
 ) -> Result<Option<RpcReceipt<Eth::NetworkTypes>>, Eth::Error> {
     match eth_api.load_transaction_and_receipt(tx_hash).await? {
         Some((_, meta, _)) => {
-            // LoadReceipt::block_transaction_receipt loads the block again, so loading blocks again doesn't hurt performance much
+            // LoadReceipt::block_transaction_receipt loads the block again, so loading blocks again
+            // doesn't hurt performance much
             info!("block hash: {:?}", meta.block_hash);
             let Some((system_tx_count, block_receipts)) =
                 adjust_block_receipts(meta.block_hash.into(), eth_api).await?
@@ -464,8 +418,9 @@ where
         let res =
             self.eth_api.block_transaction_count_by_hash(hash).instrument(engine_span!()).await?;
         Ok(res.map(|count| {
-            count
-                - U256::from(system_tx_count_for_block(&*self.eth_api, BlockId::Hash(hash.into())))
+            let sys_tx_count =
+                system_tx_count_for_block(&*self.eth_api, BlockId::Hash(hash.into()));
+            count - U256::from(sys_tx_count)
         }))
     }
 

@@ -89,7 +89,6 @@ where
     /// Process a new payload and return the outcome
     fn new_payload(&self, block: BlockMsg, peer_id: PeerId) -> ImportFut {
         let engine = self.engine.clone();
-
         Box::pin(async move {
             let sealed_block = block.block.0.block.clone().seal();
             let payload = HlPayloadTypes::block_to_payload(sealed_block);
@@ -107,7 +106,7 @@ where
                     .into(),
                     _ => None,
                 },
-                Err(err) => None,
+                Err(_) => None,
             }
         })
     }
@@ -117,15 +116,10 @@ where
         let engine = self.engine.clone();
         let consensus = self.consensus.clone();
         let sealed_block = block.block.0.block.clone().seal();
-        let hash = sealed_block.hash();
-        let number = sealed_block.number();
+        let (hash, number) = (sealed_block.hash(), sealed_block.number());
 
         Box::pin(async move {
-            let (head_block_hash, current_hash) = match consensus.canonical_head(hash, number) {
-                Ok(hash) => hash,
-                Err(_) => return None,
-            };
-
+            let (head_block_hash, _) = consensus.canonical_head(hash, number).ok()?;
             let state = ForkchoiceState {
                 head_block_hash,
                 safe_block_hash: head_block_hash,
@@ -146,18 +140,15 @@ where
                     .into(),
                     _ => None,
                 },
-                Err(err) => None,
+                Err(_) => None,
             }
         })
     }
 
     /// Add a new block import task to the pending imports
     fn on_new_block(&mut self, block: BlockMsg, peer_id: PeerId) {
-        let payload_fut = self.new_payload(block.clone(), peer_id);
-        self.pending_imports.push(payload_fut);
-
-        let fcu_fut = self.update_fork_choice(block, peer_id);
-        self.pending_imports.push(fcu_fut);
+        self.pending_imports.push(self.new_payload(block.clone(), peer_id));
+        self.pending_imports.push(self.update_fork_choice(block, peer_id));
     }
 }
 
@@ -176,11 +167,9 @@ where
         }
 
         // Process completed imports and send events to network
-        while let Poll::Ready(Some(outcome)) = this.pending_imports.poll_next_unpin(cx) {
-            if let Some(outcome) = outcome {
-                if let Err(e) = this.to_network.send(BlockImportEvent::Outcome(outcome)) {
-                    return Poll::Ready(Err(Box::new(e)));
-                }
+        while let Poll::Ready(Some(Some(outcome))) = this.pending_imports.poll_next_unpin(cx) {
+            if let Err(e) = this.to_network.send(BlockImportEvent::Outcome(outcome)) {
+                return Poll::Ready(Err(Box::new(e)));
             }
         }
 
@@ -261,15 +250,12 @@ mod tests {
         fn chain_info(&self) -> Result<ChainInfo, ProviderError> {
             unimplemented!()
         }
-
         fn best_block_number(&self) -> Result<u64, ProviderError> {
             Ok(0)
         }
-
         fn last_block_number(&self) -> Result<u64, ProviderError> {
             Ok(0)
         }
-
         fn block_number(&self, _hash: B256) -> Result<Option<u64>, ProviderError> {
             Ok(None)
         }
@@ -279,7 +265,6 @@ mod tests {
         fn block_hash(&self, _number: u64) -> Result<Option<B256>, ProviderError> {
             Ok(Some(B256::ZERO))
         }
-
         fn canonical_hashes_range(
             &self,
             _start: u64,
@@ -299,14 +284,12 @@ mod tests {
         fn both_valid() -> Self {
             Self { new_payload: PayloadStatusEnum::Valid, fcu: PayloadStatusEnum::Valid }
         }
-
         fn invalid_new_payload() -> Self {
             Self {
                 new_payload: PayloadStatusEnum::Invalid { validation_error: "test error".into() },
                 fcu: PayloadStatusEnum::Valid,
             }
         }
-
         fn invalid_fcu() -> Self {
             Self {
                 new_payload: PayloadStatusEnum::Valid,
@@ -326,19 +309,15 @@ mod tests {
             let consensus = Arc::new(HlConsensus { provider: MockProvider });
             let (to_engine, from_engine) = mpsc::unbounded_channel();
             let engine_handle = ConsensusEngineHandle::new(to_engine);
-
             handle_engine_msg(from_engine, responses).await;
 
             let (to_import, from_network) = mpsc::unbounded_channel();
             let (to_network, import_outcome) = mpsc::unbounded_channel();
-
             let handle = ImportHandle::new(to_import, import_outcome);
-
             let service = ImportService::new(consensus, engine_handle, from_network, to_network);
             tokio::spawn(Box::pin(async move {
                 service.await.unwrap();
             }));
-
             Self { handle }
         }
 

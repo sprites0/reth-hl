@@ -77,19 +77,19 @@ impl BlockPoller {
         start_rx.recv().await.ok_or(eyre::eyre!("Failed to receive start signal"))?;
         info!("Starting block poller");
 
-        let latest_block_number = block_source
+        let mut next_block_number = block_source
             .find_latest_block_number()
             .await
             .ok_or(eyre::eyre!("Failed to find latest block number"))?;
 
-        let mut next_block_number = latest_block_number;
         loop {
-            let Ok(block) = block_source.collect_block(next_block_number).await else {
-                tokio::time::sleep(Self::POLL_INTERVAL).await;
-                continue;
-            };
-            block_tx_clone.send((next_block_number, block)).await?;
-            next_block_number += 1;
+            match block_source.collect_block(next_block_number).await {
+                Ok(block) => {
+                    block_tx_clone.send((next_block_number, block)).await?;
+                    next_block_number += 1;
+                }
+                Err(_) => tokio::time::sleep(Self::POLL_INTERVAL).await,
+            }
         }
     }
 }
@@ -111,8 +111,7 @@ impl BlockImport<HlNewBlock> for BlockPoller {
                     },
                 }))
             }
-            Poll::Ready(None) => Poll::Pending,
-            Poll::Pending => Poll::Pending,
+            Poll::Ready(None) | Poll::Pending => Poll::Pending,
         }
     }
 
@@ -157,12 +156,11 @@ impl<BS: BlockSource> PseudoPeer<BS> {
         block_numbers: impl IntoIterator<Item = u64>,
     ) -> Vec<BlockAndReceipts> {
         let block_numbers = block_numbers.into_iter().collect::<Vec<_>>();
-        let blocks = futures::stream::iter(block_numbers)
+        futures::stream::iter(block_numbers)
             .map(async |number| self.collect_block(number).await.unwrap())
             .buffered(self.block_source.recommended_chunk_size() as usize)
             .collect::<Vec<_>>()
-            .await;
-        blocks
+            .await
     }
 
     pub async fn process_eth_request(
@@ -179,7 +177,6 @@ impl<BS: BlockSource> PseudoPeer<BS> {
                 debug!(
                     "GetBlockHeaders request: {start_block:?}, {limit:?}, {skip:?}, {direction:?}"
                 );
-
                 let number = match start_block {
                     HashOrNumber::Hash(hash) => self.hash_to_block_number(hash).await,
                     HashOrNumber::Number(number) => number,
@@ -215,12 +212,8 @@ impl<BS: BlockSource> PseudoPeer<BS> {
 
                 let _ = response.send(Ok(BlockBodies(block_bodies)));
             }
-            IncomingEthRequest::GetNodeData { .. } => {
-                debug!("GetNodeData request: {eth_req:?}");
-            }
-            eth_req => {
-                debug!("New eth protocol request: {eth_req:?}");
-            }
+            IncomingEthRequest::GetNodeData { .. } => debug!("GetNodeData request: {eth_req:?}"),
+            eth_req => debug!("New eth protocol request: {eth_req:?}"),
         }
         Ok(())
     }
@@ -251,7 +244,6 @@ impl<BS: BlockSource> PseudoPeer<BS> {
         // This is tricky because Raw EVM files (BlockSource) does not have hash to number mapping
         // so we can either enumerate all blocks to get hash to number mapping, or fallback to an
         // official RPC. The latter is much easier but has 300/day rate limit.
-
         use jsonrpsee::http_client::HttpClientBuilder;
         use jsonrpsee_core::client::ClientT;
 
@@ -259,7 +251,6 @@ impl<BS: BlockSource> PseudoPeer<BS> {
         let client =
             HttpClientBuilder::default().build(self.chain_spec.official_rpc_url()).unwrap();
         let target_block: Block = client.request("eth_getBlockByHash", (hash, false)).await?;
-
         debug!("From official RPC: {:?} for {hash:?}", target_block.header.number);
         self.cache_blocks([(hash, target_block.header.number)]);
         Ok(target_block.header.number)
@@ -272,9 +263,10 @@ impl<BS: BlockSource> PseudoPeer<BS> {
             if self.if_hit_then_warm_around.lock().unwrap().contains(&block_number) {
                 self.warm_cache_around_blocks(block_number, self.warm_cache_size).await;
             }
-            return Some(block_number);
+            Some(block_number)
+        } else {
+            None
         }
-        None
     }
 
     /// Backfill the cache with blocks to find the target hash
@@ -319,10 +311,11 @@ impl<BS: BlockSource> PseudoPeer<BS> {
     async fn warm_cache_around_blocks(&mut self, block_number: u64, chunk_size: u64) {
         let start = std::cmp::max(block_number.saturating_sub(chunk_size), 1);
         let end = std::cmp::min(block_number + chunk_size, self.known_latest_block_number);
-
-        self.if_hit_then_warm_around.lock().unwrap().insert(start);
-        self.if_hit_then_warm_around.lock().unwrap().insert(end);
-
+        {
+            let mut guard = self.if_hit_then_warm_around.lock().unwrap();
+            guard.insert(start);
+            guard.insert(end);
+        }
         const IMPOSSIBLE_HASH: B256 = B256::ZERO;
         let _ = self.try_block_range_for_hash(start, end, IMPOSSIBLE_HASH).await;
     }
@@ -348,15 +341,12 @@ impl<BS: BlockSource> PseudoPeer<BS> {
         }
 
         debug!("Backfilling from {start_number} to {end_number}");
-
         // Collect blocks and cache them
         let blocks = self.collect_blocks(uncached_block_numbers).await;
         let block_map: HashMap<B256, u64> =
             blocks.into_iter().map(|block| (block.hash(), block.number())).collect();
-
         let maybe_block_number = block_map.get(&target_hash).copied();
         self.cache_blocks(block_map);
-
         Ok(maybe_block_number)
     }
 

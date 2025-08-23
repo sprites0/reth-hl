@@ -71,10 +71,10 @@ where
         let timestamp = evm_env.block_env.timestamp.saturating_to();
 
         // Filter out system tx receipts
-        let transactions_for_root: Vec<TransactionSigned> =
-            transactions.iter().filter(|t| !is_system_transaction(t)).cloned().collect::<Vec<_>>();
-        let receipts_for_root: Vec<Receipt> =
-            receipts.iter().filter(|r| r.cumulative_gas_used() != 0).cloned().collect::<Vec<_>>();
+        let transactions_for_root: Vec<_> =
+            transactions.iter().filter(|t| !is_system_transaction(t)).cloned().collect();
+        let receipts_for_root: Vec<_> =
+            receipts.iter().filter(|r| r.cumulative_gas_used() != 0).cloned().collect();
 
         let transactions_root = proofs::calculate_transaction_root(&transactions_for_root);
         let receipts_root = Receipt::calculate_receipt_root_no_memo(&receipts_for_root);
@@ -295,7 +295,6 @@ where
         // configure evm env based on parent block
         let mut cfg_env =
             CfgEnv::new().with_chain_id(self.chain_spec().chain().id()).with_spec(spec);
-
         if let Some(blob_params) = &blob_params {
             cfg_env.set_max_blobs_per_tx(blob_params.max_blobs_per_tx);
         }
@@ -376,10 +375,6 @@ where
         block: &'a SealedBlock<BlockTy<Self::Primitives>>,
     ) -> ExecutionCtxFor<'a, Self> {
         let block_body = block.body();
-        let extras = HlExtras {
-            read_precompile_calls: block_body.read_precompile_calls.clone(),
-            highest_precompile_address: block_body.highest_precompile_address,
-        };
         HlBlockExecutionCtx {
             ctx: EthBlockExecutionCtx {
                 parent_hash: block.header().parent_hash,
@@ -387,7 +382,10 @@ where
                 ommers: &block.body().ommers,
                 withdrawals: block.body().withdrawals.as_ref().map(Cow::Borrowed),
             },
-            extras,
+            extras: HlExtras {
+                read_precompile_calls: block_body.read_precompile_calls.clone(),
+                highest_precompile_address: block_body.highest_precompile_address,
+            },
         }
     }
 
@@ -403,8 +401,7 @@ where
                 ommers: &[],
                 withdrawals: attributes.withdrawals.map(Cow::Owned),
             },
-            // TODO: hacky, double check if this is correct
-            extras: HlExtras::default(),
+            extras: HlExtras::default(), // TODO: hacky, double check if this is correct
         }
     }
 }
@@ -416,10 +413,6 @@ impl ConfigureEngineEvm<HlExecutionData> for HlEvmConfig {
 
     fn context_for_payload<'a>(&self, payload: &'a HlExecutionData) -> ExecutionCtxFor<'a, Self> {
         let block = &payload.0;
-        let extras = HlExtras {
-            read_precompile_calls: block.body.read_precompile_calls.clone(),
-            highest_precompile_address: block.body.highest_precompile_address,
-        };
         HlBlockExecutionCtx {
             ctx: EthBlockExecutionCtx {
                 parent_hash: block.header.parent_hash,
@@ -427,7 +420,10 @@ impl ConfigureEngineEvm<HlExecutionData> for HlEvmConfig {
                 ommers: &block.body.ommers,
                 withdrawals: block.body.withdrawals.as_ref().map(Cow::Borrowed),
             },
-            extras,
+            extras: HlExtras {
+                read_precompile_calls: block.body.read_precompile_calls.clone(),
+                highest_precompile_address: block.body.highest_precompile_address,
+            },
         }
     }
 

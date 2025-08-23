@@ -26,8 +26,7 @@ pub struct LocalBlocksCache {
 }
 
 impl LocalBlocksCache {
-    // 3660 blocks per hour
-    const CACHE_SIZE: u32 = 8000;
+    const CACHE_SIZE: u32 = 8000; // 3660 blocks per hour
 
     fn new() -> Self {
         Self { cache: LruMap::new(Self::CACHE_SIZE), ranges: RangeInclusiveMap::new() }
@@ -60,8 +59,7 @@ struct ScanOptions {
 }
 
 fn line_to_evm_block(line: &str) -> serde_json::Result<(BlockAndReceipts, u64)> {
-    let LocalBlockAndReceipts(_block_timestamp, parsed_block): LocalBlockAndReceipts =
-        serde_json::from_str(line)?;
+    let LocalBlockAndReceipts(_, parsed_block): LocalBlockAndReceipts = serde_json::from_str(line)?;
     let height = match &parsed_block.block {
         EvmBlock::Reth115(b) => b.header.header.number,
     };
@@ -69,16 +67,13 @@ fn line_to_evm_block(line: &str) -> serde_json::Result<(BlockAndReceipts, u64)> 
 }
 
 fn scan_hour_file(path: &Path, last_line: &mut usize, options: ScanOptions) -> ScanResult {
-    let file = File::open(path).expect("Failed to open hour file path");
-    let reader = BufReader::new(file);
-
-    let ScanOptions { start_height, only_load_ranges } = options;
-
-    let mut new_blocks = Vec::new();
-    let mut last_height = start_height;
-    let lines: Vec<String> = reader.lines().collect::<Result<_, _>>().unwrap();
+    let lines: Vec<String> = BufReader::new(File::open(path).expect("Failed to open hour file"))
+        .lines()
+        .collect::<Result<_, _>>()
+        .unwrap();
     let skip = if *last_line == 0 { 0 } else { *last_line - 1 };
-
+    let mut new_blocks = Vec::new();
+    let mut last_height = options.start_height;
     let mut block_ranges = Vec::new();
     let mut current_range: Option<(u64, u64)> = None;
 
@@ -88,18 +83,16 @@ fn scan_hour_file(path: &Path, last_line: &mut usize, options: ScanOptions) -> S
         }
 
         match line_to_evm_block(line) {
-            Ok((parsed_block, height)) => {
-                if height >= start_height {
-                    last_height = last_height.max(height);
-                    if !only_load_ranges {
-                        new_blocks.push(parsed_block);
-                    }
-                    *last_line = line_idx;
+            Ok((parsed_block, height)) if height >= options.start_height => {
+                last_height = last_height.max(height);
+                if !options.only_load_ranges {
+                    new_blocks.push(parsed_block);
                 }
+                *last_line = line_idx;
 
                 match current_range {
                     Some((start, end)) if end + 1 == height => {
-                        current_range = Some((start, height));
+                        current_range = Some((start, height))
                     }
                     _ => {
                         if let Some((start, end)) = current_range.take() {
@@ -109,17 +102,14 @@ fn scan_hour_file(path: &Path, last_line: &mut usize, options: ScanOptions) -> S
                     }
                 }
             }
-            Err(_) => {
-                warn!("Failed to parse line: {}...", line.get(0..50).unwrap_or(line));
-                continue;
-            }
+            Ok(_) => {}
+            Err(_) => warn!("Failed to parse line: {}...", line.get(0..50).unwrap_or(line)),
         }
     }
 
     if let Some((start, end)) = current_range {
         block_ranges.push(start..=end);
     }
-
     ScanResult {
         path: path.to_path_buf(),
         next_expected_height: last_height + 1,
@@ -204,33 +194,27 @@ fn read_last_complete_line<R: Read + Seek>(read: &mut R) -> Option<(BlockAndRece
     let mut last_line = Vec::new();
 
     while pos > 0 {
-        let read_size = std::cmp::min(pos, CHUNK_SIZE);
+        let read_size = pos.min(CHUNK_SIZE);
         buf.resize(read_size as usize, 0);
-
         read.seek(SeekFrom::Start(pos - read_size)).unwrap();
         read.read_exact(&mut buf).unwrap();
-
         last_line = [buf.clone(), last_line].concat();
-
         if last_line.ends_with(b"\n") {
             last_line.pop();
         }
 
         if let Some(idx) = last_line.iter().rposition(|&b| b == b'\n') {
             let candidate = &last_line[idx + 1..];
-            if let Ok((evm_block, height)) = line_to_evm_block(str::from_utf8(candidate).unwrap()) {
-                return Some((evm_block, height));
+            if let Ok(result) = line_to_evm_block(str::from_utf8(candidate).unwrap()) {
+                return Some(result);
             }
-            // Incomplete line; truncate and continue
             last_line.truncate(idx);
         }
-
         if pos < read_size {
             break;
         }
         pos -= read_size;
     }
-
     line_to_evm_block(&String::from_utf8(last_line).unwrap()).ok()
 }
 
@@ -246,12 +230,9 @@ impl HlNodeBlockSource {
 
     async fn update_last_fetch(&self, height: u64, now: OffsetDateTime) {
         let mut last_fetch = self.last_local_fetch.lock().await;
-        if let Some((last_height, _)) = *last_fetch {
-            if last_height >= height {
-                return;
-            }
+        if last_fetch.is_none_or(|(h, _)| h < height) {
+            *last_fetch = Some((height, now));
         }
-        *last_fetch = Some((height, now));
     }
 
     async fn try_collect_local_block(&self, height: u64) -> Option<BlockAndReceipts> {
@@ -259,9 +240,7 @@ impl HlNodeBlockSource {
         if let Some(block) = u_cache.cache.remove(&height) {
             return Some(block);
         }
-
         let path = u_cache.ranges.get(&height).cloned()?;
-
         info!("Loading block data from {:?}", path);
         u_cache.load_scan_result(scan_hour_file(
             &path,
@@ -272,36 +251,32 @@ impl HlNodeBlockSource {
     }
 
     fn datetime_from_path(path: &Path) -> Option<OffsetDateTime> {
-        let dt_part = path.parent()?.file_name()?.to_str()?;
-        let hour_part = path.file_name()?.to_str()?;
-
-        let hour: u8 = hour_part.parse().ok()?;
+        let (dt_part, hour_part) =
+            (path.parent()?.file_name()?.to_str()?, path.file_name()?.to_str()?);
         Some(OffsetDateTime::new_utc(
             Date::parse(dt_part, &format_description!("[year][month][day]")).ok()?,
-            Time::from_hms(hour, 0, 0).ok()?,
+            Time::from_hms(hour_part.parse().ok()?, 0, 0).ok()?,
         ))
     }
 
     fn all_hourly_files(root: &Path) -> Option<Vec<PathBuf>> {
-        let dir = root.join(HOURLY_SUBDIR);
         let mut files = Vec::new();
-
-        for entry in std::fs::read_dir(dir).ok()? {
-            let file = entry.ok()?.path();
-            let subfiles: Vec<_> = std::fs::read_dir(&file)
-                .ok()?
-                .filter_map(|f| f.ok().map(|f| f.path()))
-                .filter(|p| Self::datetime_from_path(p).is_some())
-                .collect();
-            files.extend(subfiles);
+        for entry in std::fs::read_dir(root.join(HOURLY_SUBDIR)).ok()? {
+            let dir = entry.ok()?.path();
+            if let Ok(subentries) = std::fs::read_dir(&dir) {
+                files.extend(
+                    subentries
+                        .filter_map(|f| f.ok().map(|f| f.path()))
+                        .filter(|p| Self::datetime_from_path(p).is_some()),
+                );
+            }
         }
-
         files.sort();
         Some(files)
     }
 
     fn find_latest_hourly_file(root: &Path) -> Option<PathBuf> {
-        Self::all_hourly_files(root)?.last().cloned()
+        Self::all_hourly_files(root)?.into_iter().last()
     }
 
     async fn try_backfill_local_blocks(
@@ -310,69 +285,55 @@ impl HlNodeBlockSource {
         cutoff_height: u64,
     ) -> eyre::Result<()> {
         let mut u_cache = cache.lock().await;
-
         for subfile in Self::all_hourly_files(root).unwrap_or_default() {
-            let mut file = File::open(&subfile).expect("Failed to open hour file path");
-
+            let mut file = File::open(&subfile).expect("Failed to open hour file");
             if let Some((_, height)) = read_last_complete_line(&mut file) {
                 if height < cutoff_height {
                     continue;
                 }
             } else {
-                warn!("Failed to parse last line of file, fallback to slow path: {:?}", subfile);
+                warn!("Failed to parse last line of file: {:?}", subfile);
             }
-
             let mut scan_result = scan_hour_file(
                 &subfile,
                 &mut 0,
                 ScanOptions { start_height: cutoff_height, only_load_ranges: true },
             );
-            // Only store the block ranges for now; actual block data will be loaded lazily later to
-            // optimize memory usage
-            scan_result.new_blocks.clear();
+            scan_result.new_blocks.clear(); // Only store ranges, load data lazily
             u_cache.load_scan_result(scan_result);
         }
-
         if u_cache.ranges.is_empty() {
             warn!("No ranges found in {:?}", root);
         } else {
-            let (min, _) = u_cache.ranges.first_range_value().unwrap();
-            let (max, _) = u_cache.ranges.last_range_value().unwrap();
+            let (min, max) = (
+                u_cache.ranges.first_range_value().unwrap(),
+                u_cache.ranges.last_range_value().unwrap(),
+            );
             info!(
                 "Populated {} ranges (min: {}, max: {})",
                 u_cache.ranges.len(),
-                min.start(),
-                max.end()
+                min.0.start(),
+                max.0.end()
             );
         }
-
         Ok(())
     }
 
     async fn start_local_ingest_loop(&self, current_head: u64) {
         let root = self.local_ingest_dir.to_owned();
         let cache = self.local_blocks_cache.clone();
-
         tokio::spawn(async move {
             let mut next_height = current_head;
-
-            // Wait for the first hourly file to be created
             let mut dt = loop {
-                if let Some(latest_file) = Self::find_latest_hourly_file(&root) {
-                    break Self::datetime_from_path(&latest_file).unwrap();
+                if let Some(f) = Self::find_latest_hourly_file(&root) {
+                    break Self::datetime_from_path(&f).unwrap();
                 }
                 tokio::time::sleep(TAIL_INTERVAL).await;
             };
-
-            let mut hour = dt.hour();
-            let mut day_str = date_from_datetime(dt);
-            let mut last_line = 0;
-
-            info!("Starting local ingest loop from height: {:?}", current_head);
-
+            let (mut hour, mut day_str, mut last_line) = (dt.hour(), date_from_datetime(dt), 0);
+            info!("Starting local ingest loop from height: {}", current_head);
             loop {
                 let hour_file = root.join(HOURLY_SUBDIR).join(&day_str).join(format!("{hour}"));
-
                 if hour_file.exists() {
                     let scan_result = scan_hour_file(
                         &hour_file,
@@ -380,25 +341,18 @@ impl HlNodeBlockSource {
                         ScanOptions { start_height: next_height, only_load_ranges: false },
                     );
                     next_height = scan_result.next_expected_height;
-
-                    let mut u_cache = cache.lock().await;
-                    u_cache.load_scan_result(scan_result);
+                    cache.lock().await.load_scan_result(scan_result);
                 }
-
                 let now = OffsetDateTime::now_utc();
-
                 if dt + Duration::HOUR < now {
                     dt += Duration::HOUR;
-                    hour = dt.hour();
-                    day_str = date_from_datetime(dt);
-                    last_line = 0;
+                    (hour, day_str, last_line) = (dt.hour(), date_from_datetime(dt), 0);
                     info!(
-                        "Moving to a new file. {:?}",
+                        "Moving to new file: {:?}",
                         root.join(HOURLY_SUBDIR).join(&day_str).join(format!("{hour}"))
                     );
                     continue;
                 }
-
                 tokio::time::sleep(TAIL_INTERVAL).await;
             }
         });
@@ -411,7 +365,6 @@ impl HlNodeBlockSource {
             next_block_number,
         )
         .await;
-
         self.start_local_ingest_loop(next_block_number).await;
         Ok(())
     }
@@ -421,7 +374,7 @@ impl HlNodeBlockSource {
         local_ingest_dir: PathBuf,
         next_block_number: u64,
     ) -> Self {
-        let block_source = HlNodeBlockSource {
+        let block_source = Self {
             fallback,
             local_ingest_dir,
             local_blocks_cache: Arc::new(Mutex::new(LocalBlocksCache::new())),
@@ -485,54 +438,55 @@ mod tests {
         timestamp: u64,
         extra_data: &'static [u8],
     ) -> LocalBlockAndReceipts {
-        let extra_data = Bytes::from_static(extra_data);
-        let res = BlockAndReceipts {
-            block: EvmBlock::Reth115(reth_compat::SealedBlock {
-                header: reth_compat::SealedHeader {
-                    header: Header {
-                        parent_hash: B256::ZERO,
-                        ommers_hash: B256::ZERO,
-                        beneficiary: Address::ZERO,
-                        state_root: B256::ZERO,
-                        transactions_root: B256::ZERO,
-                        receipts_root: B256::ZERO,
-                        logs_bloom: Bloom::ZERO,
-                        difficulty: U256::ZERO,
-                        number,
-                        gas_limit: 0,
-                        gas_used: 0,
-                        timestamp,
-                        extra_data,
-                        mix_hash: B256::ZERO,
-                        nonce: B64::ZERO,
-                        base_fee_per_gas: None,
-                        withdrawals_root: None,
-                        blob_gas_used: None,
-                        excess_blob_gas: None,
-                        parent_beacon_block_root: None,
-                        requests_hash: None,
+        LocalBlockAndReceipts(
+            timestamp.to_string(),
+            BlockAndReceipts {
+                block: EvmBlock::Reth115(reth_compat::SealedBlock {
+                    header: reth_compat::SealedHeader {
+                        header: Header {
+                            parent_hash: B256::ZERO,
+                            ommers_hash: B256::ZERO,
+                            beneficiary: Address::ZERO,
+                            state_root: B256::ZERO,
+                            transactions_root: B256::ZERO,
+                            receipts_root: B256::ZERO,
+                            logs_bloom: Bloom::ZERO,
+                            difficulty: U256::ZERO,
+                            number,
+                            gas_limit: 0,
+                            gas_used: 0,
+                            timestamp,
+                            extra_data: Bytes::from_static(extra_data),
+                            mix_hash: B256::ZERO,
+                            nonce: B64::ZERO,
+                            base_fee_per_gas: None,
+                            withdrawals_root: None,
+                            blob_gas_used: None,
+                            excess_blob_gas: None,
+                            parent_beacon_block_root: None,
+                            requests_hash: None,
+                        },
+                        hash: B256::ZERO,
                     },
-                    hash: B256::ZERO,
-                },
-                body: BlockBody { transactions: vec![], ommers: vec![], withdrawals: None },
-            }),
-            receipts: vec![],
-            system_txs: vec![],
-            read_precompile_calls: ReadPrecompileCalls(vec![]),
-            highest_precompile_address: None,
-        };
-        LocalBlockAndReceipts(timestamp.to_string(), res)
+                    body: BlockBody { transactions: vec![], ommers: vec![], withdrawals: None },
+                }),
+                receipts: vec![],
+                system_txs: vec![],
+                read_precompile_calls: ReadPrecompileCalls(vec![]),
+                highest_precompile_address: None,
+            },
+        )
     }
 
     fn setup_temp_dir_and_file() -> eyre::Result<(tempfile::TempDir, File)> {
         let now = OffsetDateTime::now_utc();
-        let day_str = date_from_datetime(now);
-        let hour = now.hour();
-
         let temp_dir = tempfile::tempdir()?;
-        let path = temp_dir.path().join(HOURLY_SUBDIR).join(&day_str).join(format!("{hour}"));
+        let path = temp_dir
+            .path()
+            .join(HOURLY_SUBDIR)
+            .join(date_from_datetime(now))
+            .join(format!("{}", now.hour()));
         std::fs::create_dir_all(path.parent().unwrap())?;
-
         Ok((temp_dir, File::create(path)?))
     }
 

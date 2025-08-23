@@ -68,19 +68,15 @@ impl BlockBodyTrait for HlBlockBody {
     fn transactions(&self) -> &[Self::Transaction] {
         BlockBodyTrait::transactions(&self.inner)
     }
-
     fn into_ethereum_body(self) -> BlockBody {
         self.inner
     }
-
     fn into_transactions(self) -> Vec<Self::Transaction> {
         self.inner.into_transactions()
     }
-
     fn withdrawals(&self) -> Option<&alloy_rpc_types::Withdrawals> {
         self.inner.withdrawals()
     }
-
     fn ommers(&self) -> Option<&[Self::OmmerHeader]> {
         self.inner.ommers()
     }
@@ -116,15 +112,12 @@ impl Block for HlBlock {
     fn new(header: Self::Header, body: Self::Body) -> Self {
         Self { header, body }
     }
-
     fn header(&self) -> &Self::Header {
         &self.header
     }
-
     fn body(&self) -> &Self::Body {
         &self.body
     }
-
     fn split(self) -> (Self::Header, Self::Body) {
         (self.header, self.body)
     }
@@ -179,7 +172,6 @@ mod rlp {
                 read_precompile_calls,
                 highest_precompile_address,
             } = value;
-
             Self {
                 transactions: Cow::Borrowed(transactions),
                 ommers: Cow::Borrowed(ommers),
@@ -203,7 +195,6 @@ mod rlp {
                         highest_precompile_address,
                     },
             } = value;
-
             Self {
                 header: Cow::Borrowed(header),
                 transactions: Cow::Borrowed(transactions),
@@ -220,7 +211,6 @@ mod rlp {
         fn encode(&self, out: &mut dyn bytes::BufMut) {
             BlockBodyHelper::from(self).encode(out);
         }
-
         fn length(&self) -> usize {
             BlockBodyHelper::from(self).length()
         }
@@ -253,7 +243,6 @@ mod rlp {
         fn encode(&self, out: &mut dyn bytes::BufMut) {
             BlockHelper::from(self).encode(out);
         }
-
         fn length(&self) -> usize {
             BlockHelper::from(self).length()
         }
