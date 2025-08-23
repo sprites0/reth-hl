@@ -7,7 +7,7 @@ use reth_chainspec::{EthereumHardforks, ForkCondition};
 use std::sync::Arc;
 
 /// Extends [`EthereumHardforks`] with hl helper methods.
-/// 
+///
 /// Currently a placeholder for future use.
 pub trait HlHardforks: EthereumHardforks {}
 

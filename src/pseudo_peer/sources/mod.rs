@@ -13,8 +13,8 @@ mod hl_node;
 pub use hl_node::HlNodeBlockSource;
 
 pub trait BlockSource: Send + Sync + std::fmt::Debug + Unpin + 'static {
-    fn collect_block(&self, height: u64) -> BoxFuture<eyre::Result<BlockAndReceipts>>;
-    fn find_latest_block_number(&self) -> BoxFuture<Option<u64>>;
+    fn collect_block(&self, height: u64) -> BoxFuture<'static, eyre::Result<BlockAndReceipts>>;
+    fn find_latest_block_number(&self) -> BoxFuture<'static, Option<u64>>;
     fn recommended_chunk_size(&self) -> u64;
 }
 
@@ -81,7 +81,7 @@ impl S3BlockSource {
 }
 
 impl BlockSource for S3BlockSource {
-    fn collect_block(&self, height: u64) -> BoxFuture<eyre::Result<BlockAndReceipts>> {
+    fn collect_block(&self, height: u64) -> BoxFuture<'static, eyre::Result<BlockAndReceipts>> {
         let client = self.client.clone();
         let bucket = self.bucket.clone();
         async move {
@@ -100,7 +100,7 @@ impl BlockSource for S3BlockSource {
         .boxed()
     }
 
-    fn find_latest_block_number(&self) -> BoxFuture<Option<u64>> {
+    fn find_latest_block_number(&self) -> BoxFuture<'static, Option<u64>> {
         let client = self.client.clone();
         let bucket = self.bucket.clone();
         async move {
@@ -138,7 +138,7 @@ impl BlockSource for S3BlockSource {
 }
 
 impl BlockSource for LocalBlockSource {
-    fn collect_block(&self, height: u64) -> BoxFuture<eyre::Result<BlockAndReceipts>> {
+    fn collect_block(&self, height: u64) -> BoxFuture<'static, eyre::Result<BlockAndReceipts>> {
         let dir = self.dir.clone();
         async move {
             let path = dir.join(rmp_path(height));
@@ -152,7 +152,7 @@ impl BlockSource for LocalBlockSource {
         .boxed()
     }
 
-    fn find_latest_block_number(&self) -> BoxFuture<Option<u64>> {
+    fn find_latest_block_number(&self) -> BoxFuture<'static, Option<u64>> {
         let dir = self.dir.clone();
         async move {
             let (_, first_level) = Self::pick_path_with_highest_number(dir.clone(), true).await?;
@@ -202,11 +202,11 @@ fn rmp_path(height: u64) -> String {
 }
 
 impl BlockSource for BlockSourceBoxed {
-    fn collect_block(&self, height: u64) -> BoxFuture<eyre::Result<BlockAndReceipts>> {
+    fn collect_block(&self, height: u64) -> BoxFuture<'static, eyre::Result<BlockAndReceipts>> {
         self.as_ref().collect_block(height)
     }
 
-    fn find_latest_block_number(&self) -> BoxFuture<Option<u64>> {
+    fn find_latest_block_number(&self) -> BoxFuture<'static, Option<u64>> {
         self.as_ref().find_latest_block_number()
     }
 
@@ -229,7 +229,7 @@ impl CachedBlockSource {
 }
 
 impl BlockSource for CachedBlockSource {
-    fn collect_block(&self, height: u64) -> BoxFuture<eyre::Result<BlockAndReceipts>> {
+    fn collect_block(&self, height: u64) -> BoxFuture<'static, eyre::Result<BlockAndReceipts>> {
         let block_source = self.block_source.clone();
         let cache = self.cache.clone();
         async move {
@@ -243,7 +243,7 @@ impl BlockSource for CachedBlockSource {
         .boxed()
     }
 
-    fn find_latest_block_number(&self) -> BoxFuture<Option<u64>> {
+    fn find_latest_block_number(&self) -> BoxFuture<'static, Option<u64>> {
         self.block_source.find_latest_block_number()
     }
 

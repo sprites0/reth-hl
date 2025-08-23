@@ -133,16 +133,19 @@ pub struct HlNodeBlockSource {
 }
 
 impl BlockSource for HlNodeBlockSource {
-    fn collect_block(&self, height: u64) -> BoxFuture<eyre::Result<BlockAndReceipts>> {
+    fn collect_block(&self, height: u64) -> BoxFuture<'static, eyre::Result<BlockAndReceipts>> {
+        let fallback = self.fallback.clone();
+        let local_blocks_cache = self.local_blocks_cache.clone();
+        let last_local_fetch = self.last_local_fetch.clone();
         Box::pin(async move {
             let now = OffsetDateTime::now_utc();
 
-            if let Some(block) = self.try_collect_local_block(height).await {
-                self.update_last_fetch(height, now).await;
+            if let Some(block) = Self::try_collect_local_block(local_blocks_cache, height).await {
+                Self::update_last_fetch(last_local_fetch, height, now).await;
                 return Ok(block);
             }
 
-            if let Some((last_height, last_poll_time)) = *self.last_local_fetch.lock().await {
+            if let Some((last_height, last_poll_time)) = *last_local_fetch.lock().await {
                 let more_recent = last_height < height;
                 let too_soon = now - last_poll_time < Self::MAX_ALLOWED_THRESHOLD_BEFORE_FALLBACK;
                 if more_recent && too_soon {
@@ -152,20 +155,22 @@ impl BlockSource for HlNodeBlockSource {
                 }
             }
 
-            let block = self.fallback.collect_block(height).await?;
-            self.update_last_fetch(height, now).await;
+            let block = fallback.collect_block(height).await?;
+            Self::update_last_fetch(last_local_fetch, height, now).await;
             Ok(block)
         })
     }
 
-    fn find_latest_block_number(&self) -> BoxFuture<Option<u64>> {
+    fn find_latest_block_number(&self) -> BoxFuture<'static, Option<u64>> {
+        let fallback = self.fallback.clone();
+        let local_ingest_dir = self.local_ingest_dir.clone();
         Box::pin(async move {
-            let Some(dir) = Self::find_latest_hourly_file(&self.local_ingest_dir) else {
+            let Some(dir) = Self::find_latest_hourly_file(&local_ingest_dir) else {
                 warn!(
                     "No EVM blocks from hl-node found at {:?}; fallback to s3/ingest-dir",
-                    self.local_ingest_dir
+                    local_ingest_dir
                 );
-                return self.fallback.find_latest_block_number().await;
+                return fallback.find_latest_block_number().await;
             };
 
             let mut file = File::open(&dir).expect("Failed to open hour file path");
@@ -177,7 +182,7 @@ impl BlockSource for HlNodeBlockSource {
                     "Failed to parse the hl-node hourly file at {:?}; fallback to s3/ingest-dir",
                     file
                 );
-                self.fallback.find_latest_block_number().await
+                fallback.find_latest_block_number().await
             }
         })
     }
@@ -228,15 +233,22 @@ impl HlNodeBlockSource {
     /// fallback attempts.
     pub(crate) const MAX_ALLOWED_THRESHOLD_BEFORE_FALLBACK: Duration = Duration::milliseconds(5000);
 
-    async fn update_last_fetch(&self, height: u64, now: OffsetDateTime) {
-        let mut last_fetch = self.last_local_fetch.lock().await;
+    async fn update_last_fetch(
+        last_local_fetch: Arc<Mutex<Option<(u64, OffsetDateTime)>>>,
+        height: u64,
+        now: OffsetDateTime,
+    ) {
+        let mut last_fetch = last_local_fetch.lock().await;
         if last_fetch.is_none_or(|(h, _)| h < height) {
             *last_fetch = Some((height, now));
         }
     }
 
-    async fn try_collect_local_block(&self, height: u64) -> Option<BlockAndReceipts> {
-        let mut u_cache = self.local_blocks_cache.lock().await;
+    async fn try_collect_local_block(
+        local_blocks_cache: Arc<Mutex<LocalBlocksCache>>,
+        height: u64,
+    ) -> Option<BlockAndReceipts> {
+        let mut u_cache = local_blocks_cache.lock().await;
         if let Some(block) = u_cache.cache.remove(&height) {
             return Some(block);
         }

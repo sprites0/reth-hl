@@ -37,7 +37,7 @@ impl EthForwarderExt {
         Self { client }
     }
 
-    fn from_client_error(e: ClientError, internal_error_prefix: &str) -> ErrorObject {
+    fn from_client_error(e: ClientError, internal_error_prefix: &str) -> ErrorObject<'static> {
         match e {
             ClientError::Call(e) => e,
             _ => ErrorObject::owned(
