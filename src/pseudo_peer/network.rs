@@ -6,7 +6,11 @@ use reth_network::{
 };
 use reth_network_peers::TrustedPeer;
 use reth_provider::test_utils::NoopProvider;
-use std::{str::FromStr, sync::Arc};
+use std::{
+    net::{Ipv4Addr, SocketAddr},
+    str::FromStr,
+    sync::Arc,
+};
 use tokio::sync::mpsc;
 
 pub struct NetworkBuilder {
@@ -37,12 +41,6 @@ impl NetworkBuilder {
         self
     }
 
-    pub fn with_ports(mut self, discovery_port: u16, listener_port: u16) -> Self {
-        self.discovery_port = discovery_port;
-        self.listener_port = listener_port;
-        self
-    }
-
     pub fn with_chain_spec(mut self, chain_spec: HlChainSpec) -> Self {
         self.chain_spec = chain_spec;
         self
@@ -56,8 +54,8 @@ impl NetworkBuilder {
         let builder = NetworkConfig::<(), HlNetworkPrimitives>::builder(self.secret)
             .boot_nodes(self.boot_nodes)
             .peer_config(self.peer_config)
-            .discovery_port(self.discovery_port)
-            .listener_port(self.listener_port);
+            .discovery_addr(SocketAddr::new(Ipv4Addr::LOCALHOST.into(), self.discovery_port))
+            .listener_addr(SocketAddr::new(Ipv4Addr::LOCALHOST.into(), self.listener_port));
         let chain_id = self.chain_spec.inner.chain().id();
 
         let (block_poller, start_tx) =
