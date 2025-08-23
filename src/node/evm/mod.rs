@@ -165,7 +165,6 @@ where
     type EVM = HlEvmConfig;
 
     async fn build_evm(self, ctx: &BuilderContext<Node>) -> eyre::Result<Self::EVM> {
-        let evm_config = HlEvmConfig::hl(ctx.chain_spec());
-        Ok(evm_config)
+        Ok(HlEvmConfig::hl(ctx.chain_spec()))
     }
 }

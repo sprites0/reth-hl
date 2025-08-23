@@ -5,33 +5,27 @@
 
 pub mod cli;
 pub mod config;
-pub mod consts;
-pub mod error;
 pub mod network;
 pub mod service;
 pub mod sources;
+#[cfg(test)]
+mod tests;
 pub mod utils;
 
 use std::sync::Arc;
+use tokio::sync::mpsc;
+use tracing::info;
 
 pub use cli::*;
 pub use config::*;
-pub use error::*;
 pub use network::*;
 pub use service::*;
 pub use sources::*;
-
-#[cfg(test)]
-mod tests;
-
-use tokio::sync::mpsc;
-use tracing::info;
 
 /// Re-export commonly used types
 pub mod prelude {
     pub use super::{
         config::BlockSourceConfig,
-        error::{PseudoPeerError, Result},
         service::{BlockPoller, PseudoPeer},
         sources::{BlockSource, CachedBlockSource, LocalBlockSource, S3BlockSource},
     };

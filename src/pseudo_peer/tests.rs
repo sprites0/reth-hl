@@ -17,14 +17,3 @@ async fn test_block_source_config_local() {
         matches!(config.source_type, BlockSourceType::Local { path } if path == Path::new("/test/path"))
     );
 }
-
-#[test]
-fn test_error_types() {
-    let io_error = std::io::Error::new(std::io::ErrorKind::NotFound, "File not found");
-    let benchmark_error: PseudoPeerError = io_error.into();
-
-    match benchmark_error {
-        PseudoPeerError::Io(_) => (),
-        _ => panic!("Expected Io error"),
-    }
-}

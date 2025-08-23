@@ -24,7 +24,8 @@ fn name_with_largest_number(files: &[String], is_dir: bool) -> Option<(u64, Stri
     let mut files = files
         .iter()
         .filter_map(|file_raw| {
-            let file = file_raw.strip_suffix("/").unwrap_or(file_raw).split("/").last().unwrap();
+            let file = file_raw.strip_suffix("/").unwrap_or(file_raw);
+            let file = file.split("/").last().unwrap();
             let stem = if is_dir { file } else { file.strip_suffix(".rmp.lz4")? };
             stem.parse::<u64>().ok().map(|number| (number, file_raw.to_string()))
         })
@@ -181,23 +182,6 @@ impl LocalBlockSource {
         Self { dir: dir.into() }
     }
 
-    fn name_with_largest_number_static(files: &[String], is_dir: bool) -> Option<(u64, String)> {
-        let mut files = files
-            .iter()
-            .filter_map(|file_raw| {
-                let file = file_raw.strip_suffix("/").unwrap_or(file_raw);
-                let file = file.split("/").last().unwrap();
-                let stem = if is_dir { file } else { file.strip_suffix(".rmp.lz4")? };
-                stem.parse::<u64>().ok().map(|number| (number, file_raw.to_string()))
-            })
-            .collect::<Vec<_>>();
-        if files.is_empty() {
-            return None;
-        }
-        files.sort_by_key(|(number, _)| *number);
-        files.last().map(|(number, file)| (*number, file.to_string()))
-    }
-
     async fn pick_path_with_highest_number(dir: PathBuf, is_dir: bool) -> Option<(u64, String)> {
         let files = std::fs::read_dir(&dir).unwrap().collect::<Vec<_>>();
         let files = files
@@ -206,7 +190,7 @@ impl LocalBlockSource {
             .map(|entry| entry.unwrap().path().to_string_lossy().to_string())
             .collect::<Vec<_>>();
 
-        Self::name_with_largest_number_static(&files, is_dir)
+        name_with_largest_number(&files, is_dir)
     }
 }
 

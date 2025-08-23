@@ -36,7 +36,7 @@ where
     }
 }
 
-/// Validator for Optimism engine API.
+/// Validator for HyperEVM engine API.
 #[derive(Debug, Clone)]
 pub struct HlPayloadValidator {
     inner: HlExecutionPayloadValidator<HlChainSpec>,
@@ -123,7 +123,7 @@ where
             return Err(PayloadError::BlockHash {
                 execution: sealed_block.hash(),
                 consensus: expected_hash,
-            })?;
+            });
         }
 
         Ok(sealed_block)

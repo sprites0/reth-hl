@@ -7,7 +7,6 @@ use std::sync::LazyLock;
 static GENESIS_HASH: B256 =
     b256!("d8fcc13b6a195b88b7b2da3722ff6cad767b13a8c1e9ffb1c73aa9d216d895f0");
 
-/// Dev hardforks
 pub static HL_HARDFORKS: LazyLock<ChainHardforks> = LazyLock::new(|| {
     ChainHardforks::new(vec![
         (EthereumHardfork::Frontier.boxed(), ForkCondition::Block(0)),

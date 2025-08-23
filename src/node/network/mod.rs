@@ -12,7 +12,6 @@ use crate::{
     HlBlock,
 };
 use alloy_rlp::{Decodable, Encodable};
-// use handshake::HlHandshake;
 use reth::{
     api::{FullNodeTypes, TxTy},
     builder::{components::NetworkBuilder, BuilderContext},

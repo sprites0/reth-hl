@@ -1,13 +1,14 @@
-//! Hard forks of hl protocol.
+//! Hard forks of HyperEVM.
 #![allow(unused)]
-use hl::HlHardfork;
-use reth_chainspec::{EthereumHardforks, ForkCondition};
-
 pub mod hl;
 
+use hl::HlHardfork;
+use reth_chainspec::{EthereumHardforks, ForkCondition};
+use std::sync::Arc;
+
 /// Extends [`EthereumHardforks`] with hl helper methods.
-pub trait HlHardforks: EthereumHardforks {
-    /// Retrieves [`ForkCondition`] by an [`HlHardfork`]. If `fork` is not present, returns
-    /// [`ForkCondition::Never`].
-    fn hl_fork_activation(&self, fork: HlHardfork) -> ForkCondition;
-}
+/// 
+/// Currently a placeholder for future use.
+pub trait HlHardforks: EthereumHardforks {}
+
+impl<T: HlHardforks> HlHardforks for Arc<T> {}

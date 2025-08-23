@@ -32,16 +32,6 @@ impl Default for NetworkBuilder {
 }
 
 impl NetworkBuilder {
-    pub fn with_secret(mut self, secret: SecretKey) -> Self {
-        self.secret = secret;
-        self
-    }
-
-    pub fn with_peer_config(mut self, peer_config: PeersConfig) -> Self {
-        self.peer_config = peer_config;
-        self
-    }
-
     pub fn with_boot_nodes(mut self, boot_nodes: Vec<TrustedPeer>) -> Self {
         self.boot_nodes = boot_nodes;
         self

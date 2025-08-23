@@ -114,11 +114,6 @@ impl reth_codecs::Compact for TransactionSigned {
     }
 }
 
-pub fn convert_recovered(value: Recovered<TransactionSigned>) -> Recovered<InnerType> {
-    let (tx, signer) = value.into_parts();
-    Recovered::new_unchecked(tx.into_inner(), signer)
-}
-
 impl FromRecoveredTx<TransactionSigned> for TxEnv {
     fn from_recovered_tx(tx: &TransactionSigned, sender: Address) -> Self {
         TxEnv::from_recovered_tx(&tx.inner(), sender)
@@ -191,20 +186,6 @@ impl SerdeBincodeCompat for TransactionSigned {
 }
 
 pub type BlockBody = alloy_consensus::BlockBody<TransactionSigned>;
-
-impl From<TransactionSigned> for EthereumTxEnvelope<TxEip4844> {
-    fn from(value: TransactionSigned) -> Self {
-        value.into_inner()
-    }
-}
-
-impl TryFrom<TransactionSigned> for EthereumTxEnvelope<TxEip4844WithSidecar> {
-    type Error = <InnerType as TryInto<EthereumTxEnvelope<TxEip4844WithSidecar>>>::Error;
-
-    fn try_from(value: TransactionSigned) -> Result<Self, Self::Error> {
-        value.into_inner().try_into()
-    }
-}
 
 impl TryFrom<TransactionSigned>
     for EthereumTxEnvelope<TxEip4844WithSidecar<BlobTransactionSidecarVariant>>

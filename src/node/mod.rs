@@ -15,12 +15,15 @@ use crate::{
     pseudo_peer::BlockSourceConfig,
 };
 use consensus::HlConsensusBuilder;
-use engine::HlPayloadServiceBuilder;
 use evm::HlExecutorBuilder;
 use network::HlNetworkBuilder;
 use reth::{
     api::{FullNodeTypes, NodeTypes},
-    builder::{components::ComponentsBuilder, rpc::RpcAddOns, Node, NodeAdapter},
+    builder::{
+        components::{ComponentsBuilder, NoopPayloadServiceBuilder},
+        rpc::RpcAddOns,
+        Node, NodeAdapter,
+    },
 };
 use reth_engine_primitives::ConsensusEngineHandle;
 use std::{marker::PhantomData, sync::Arc};
@@ -65,7 +68,7 @@ impl HlNode {
     ) -> ComponentsBuilder<
         Node,
         HlPoolBuilder,
-        HlPayloadServiceBuilder,
+        NoopPayloadServiceBuilder,
         HlNetworkBuilder,
         HlExecutorBuilder,
         HlConsensusBuilder,
@@ -77,7 +80,7 @@ impl HlNode {
             .node_types::<Node>()
             .pool(HlPoolBuilder)
             .executor(HlExecutorBuilder::default())
-            .payload(HlPayloadServiceBuilder::default())
+            .payload(NoopPayloadServiceBuilder::default())
             .network(HlNetworkBuilder {
                 engine_handle_rx: self.engine_handle_rx.clone(),
                 block_source_config: self.block_source_config.clone(),
@@ -100,7 +103,7 @@ where
     type ComponentsBuilder = ComponentsBuilder<
         N,
         HlPoolBuilder,
-        HlPayloadServiceBuilder,
+        NoopPayloadServiceBuilder,
         HlNetworkBuilder,
         HlExecutorBuilder,
         HlConsensusBuilder,

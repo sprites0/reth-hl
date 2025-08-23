@@ -1,8 +1,7 @@
-//! Chain specification for HyperEVM.
 pub mod hl;
 pub mod parser;
 
-use crate::hardforks::{hl::HlHardfork, HlHardforks};
+use crate::hardforks::HlHardforks;
 use alloy_consensus::Header;
 use alloy_eips::eip7840::BlobParams;
 use alloy_genesis::Genesis;
@@ -13,15 +12,13 @@ use reth_chainspec::{
 };
 use reth_discv4::NodeRecord;
 use reth_evm::eth::spec::EthExecutorSpec;
-use std::{fmt::Display, sync::Arc};
+use std::fmt::Display;
 
 pub const MAINNET_CHAIN_ID: u64 = 999;
 pub const TESTNET_CHAIN_ID: u64 = 998;
 
-/// Hl chain spec type.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct HlChainSpec {
-    /// [`ChainSpec`].
     pub inner: ChainSpec,
 }
 
@@ -117,11 +114,7 @@ impl EthereumHardforks for HlChainSpec {
     }
 }
 
-impl HlHardforks for HlChainSpec {
-    fn hl_fork_activation(&self, fork: HlHardfork) -> ForkCondition {
-        self.fork(fork)
-    }
-}
+impl HlHardforks for HlChainSpec {}
 
 impl EthExecutorSpec for HlChainSpec {
     fn deposit_contract_address(&self) -> Option<Address> {
@@ -132,12 +125,6 @@ impl EthExecutorSpec for HlChainSpec {
 impl From<HlChainSpec> for ChainSpec {
     fn from(value: HlChainSpec) -> Self {
         value.inner
-    }
-}
-
-impl HlHardforks for Arc<HlChainSpec> {
-    fn hl_fork_activation(&self, fork: HlHardfork) -> ForkCondition {
-        self.as_ref().hl_fork_activation(fork)
     }
 }
 

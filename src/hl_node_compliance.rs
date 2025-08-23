@@ -1,6 +1,6 @@
 //! Overrides for RPC methods to post-filter system transactions and logs.
 //!
-//!  System transactions are always at the beginning of the block,
+//! System transactions are always at the beginning of the block,
 //! so we can use the transaction index to determine if the log is from a system transaction,
 //! and if it is, we can exclude it.
 //!
@@ -18,13 +18,10 @@ use alloy_rpc_types::{
 use jsonrpsee::{proc_macros::rpc, PendingSubscriptionSink, SubscriptionMessage, SubscriptionSink};
 use jsonrpsee_core::{async_trait, RpcResult};
 use jsonrpsee_types::ErrorObject;
-use reth::{
-    api::FullNodeComponents, builder::rpc::RpcContext, rpc::result::internal_rpc_err,
-    tasks::TaskSpawner,
-};
+use reth::{api::FullNodeComponents, builder::rpc::RpcContext, tasks::TaskSpawner};
 use reth_primitives_traits::{BlockBody as _, SignedTransaction};
 use reth_provider::{BlockIdReader, BlockReader, BlockReaderIdExt, ReceiptProvider};
-use reth_rpc::{EthFilter, EthPubSub};
+use reth_rpc::{eth::pubsub::SubscriptionSerializeError, EthFilter, EthPubSub};
 use reth_rpc_eth_api::{
     helpers::{EthBlocks, EthTransactions, LoadReceipt},
     transaction::ConvertReceiptInput,
@@ -34,12 +31,9 @@ use reth_rpc_eth_api::{
 use serde::Serialize;
 use std::{borrow::Cow, marker::PhantomData, sync::Arc};
 use tokio_stream::{Stream, StreamExt};
-use tracing::{info, trace, Instrument};
+use tracing::{trace, Instrument};
 
-use crate::{
-    node::primitives::{HlPrimitives, TransactionSigned},
-    HlBlock,
-};
+use crate::{node::primitives::HlPrimitives, HlBlock};
 
 pub trait EthWrapper:
     EthApiServer<
@@ -197,22 +191,6 @@ fn adjust_log<Eth: EthWrapper>(mut log: Log, provider: &Eth::Provider) -> Option
     Some(log)
 }
 
-#[derive(Debug, thiserror::Error)]
-#[error("Failed to serialize subscription item: {0}")]
-pub struct SubscriptionSerializeError(#[from] serde_json::Error);
-
-impl SubscriptionSerializeError {
-    const fn new(err: serde_json::Error) -> Self {
-        Self(err)
-    }
-}
-
-impl From<SubscriptionSerializeError> for ErrorObject<'static> {
-    fn from(value: SubscriptionSerializeError) -> Self {
-        internal_rpc_err(value.to_string())
-    }
-}
-
 async fn pipe_from_stream<T: Serialize, St: Stream<Item = T> + Unpin>(
     sink: SubscriptionSink,
     mut stream: St,
@@ -223,7 +201,7 @@ async fn pipe_from_stream<T: Serialize, St: Stream<Item = T> + Unpin>(
             maybe_item = stream.next() => {
                 let Some(item) = maybe_item else { break Ok(()) };
                 let msg = SubscriptionMessage::new(sink.method_name(), sink.subscription_id(), &item)
-                    .map_err(SubscriptionSerializeError::new)?;
+                    .map_err(SubscriptionSerializeError::from)?;
                 if sink.send(msg).await.is_err() { break Ok(()); }
             }
         }
@@ -272,10 +250,6 @@ macro_rules! engine_span {
     () => {
         tracing::trace_span!(target: "rpc", "engine")
     };
-}
-
-fn is_system_tx(tx: &TransactionSigned) -> bool {
-    tx.is_system_transaction()
 }
 
 fn adjust_block<Eth: EthWrapper>(
@@ -365,7 +339,6 @@ async fn adjust_transaction_receipt<Eth: EthWrapper>(
         Some((_, meta, _)) => {
             // LoadReceipt::block_transaction_receipt loads the block again, so loading blocks again
             // doesn't hurt performance much
-            info!("block hash: {:?}", meta.block_hash);
             let Some((system_tx_count, block_receipts)) =
                 adjust_block_receipts(meta.block_hash.into(), eth_api).await?
             else {
@@ -377,10 +350,12 @@ async fn adjust_transaction_receipt<Eth: EthWrapper>(
     }
 }
 
+// This function assumes that `block_id` is already validated by the caller.
 fn system_tx_count_for_block<Eth: EthWrapper>(eth_api: &Eth, block_id: BlockId) -> usize {
     let provider = eth_api.provider();
     let block = provider.block_by_id(block_id).unwrap().unwrap();
-    let system_tx_count = block.body.transactions().iter().filter(|tx| is_system_tx(tx)).count();
+    let system_tx_count =
+        block.body.transactions().iter().filter(|tx| tx.is_system_transaction()).count();
     system_tx_count
 }
 
