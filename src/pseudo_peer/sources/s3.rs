@@ -71,27 +71,12 @@ impl BlockSource for S3BlockSource {
         let client = self.client.clone();
         let bucket = self.bucket.clone();
         async move {
-            let (_, first_level) = Self::pick_path_with_highest_number(
-                &client,
-                &bucket,
-                "",
-                true,
-            )
-            .await?;
-            let (_, second_level) = Self::pick_path_with_highest_number(
-                &client,
-                &bucket,
-                &first_level,
-                true,
-            )
-            .await?;
-            let (block_number, third_level) = Self::pick_path_with_highest_number(
-                &client,
-                &bucket,
-                &second_level,
-                false,
-            )
-            .await?;
+            let (_, first_level) =
+                Self::pick_path_with_highest_number(&client, &bucket, "", true).await?;
+            let (_, second_level) =
+                Self::pick_path_with_highest_number(&client, &bucket, &first_level, true).await?;
+            let (block_number, third_level) =
+                Self::pick_path_with_highest_number(&client, &bucket, &second_level, false).await?;
 
             info!("Latest block number: {} with path {}", block_number, third_level);
             Some(block_number)

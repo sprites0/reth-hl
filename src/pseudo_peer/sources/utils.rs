@@ -1,4 +1,4 @@
-/// Shared utilities for block sources
+//! Shared utilities for block sources
 
 /// Finds the file/directory with the largest number in its name from a list of files
 pub fn name_with_largest_number(files: &[String], is_dir: bool) -> Option<(u64, String)> {
