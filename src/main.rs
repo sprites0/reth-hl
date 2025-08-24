@@ -4,15 +4,17 @@ use clap::Parser;
 use reth::builder::{NodeBuilder, NodeHandle, WithLaunchContext};
 use reth_db::DatabaseEnv;
 use reth_hl::{
-    call_forwarder::{self, CallForwarderApiServer},
+    addons::{
+        call_forwarder::{self, CallForwarderApiServer},
+        hl_node_compliance::install_hl_node_compliance,
+        tx_forwarder::{self, EthForwarderApiServer},
+    },
     chainspec::{parser::HlChainSpecParser, HlChainSpec},
-    hl_node_compliance::install_hl_node_compliance,
     node::{
         cli::{Cli, HlNodeArgs},
         storage::tables::Tables,
         HlNode,
     },
-    tx_forwarder::{self, EthForwarderApiServer},
 };
 use tracing::info;
 
