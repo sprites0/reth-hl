@@ -53,12 +53,14 @@ impl Scanner {
             }
 
             match Self::line_to_evm_block(line) {
-                Ok((parsed_block, height)) if height >= options.start_height => {
-                    last_height = last_height.max(height);
-                    if !options.only_load_ranges {
-                        new_blocks.push(parsed_block);
+                Ok((parsed_block, height)) => {
+                    if height >= options.start_height {
+                        last_height = last_height.max(height);
+                        if !options.only_load_ranges {
+                            new_blocks.push(parsed_block);
+                        }
+                        *last_line = line_idx;
                     }
-                    *last_line = line_idx;
 
                     match current_range {
                         Some((start, end)) if end + 1 == height => {
@@ -72,7 +74,6 @@ impl Scanner {
                         }
                     }
                 }
-                Ok(_) => {}
                 Err(_) => warn!("Failed to parse line: {}...", line.get(0..50).unwrap_or(line)),
             }
         }
