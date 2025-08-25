@@ -21,7 +21,7 @@ use jsonrpsee_types::ErrorObject;
 use reth::{api::FullNodeComponents, builder::rpc::RpcContext, tasks::TaskSpawner};
 use reth_primitives_traits::{BlockBody as _, SignedTransaction};
 use reth_provider::{BlockIdReader, BlockReader, BlockReaderIdExt, ReceiptProvider};
-use reth_rpc::{eth::pubsub::SubscriptionSerializeError, EthFilter, EthPubSub};
+use reth_rpc::{eth::pubsub::SubscriptionSerializeError, EthFilter, EthPubSub, RpcTypes};
 use reth_rpc_eth_api::{
     helpers::{EthBlocks, EthTransactions, LoadReceipt},
     transaction::ConvertReceiptInput,
@@ -42,8 +42,10 @@ pub trait EthWrapper:
         RpcBlock<Self::NetworkTypes>,
         RpcReceipt<Self::NetworkTypes>,
         RpcHeader<Self::NetworkTypes>,
-    > + FullEthApiTypes<Primitives = HlPrimitives>
-    + RpcNodeCoreExt<Provider: BlockReader<Block = HlBlock>>
+    > + FullEthApiTypes<
+        Primitives = HlPrimitives,
+        NetworkTypes: RpcTypes<TransactionResponse = alloy_rpc_types_eth::Transaction>,
+    > + RpcNodeCoreExt<Provider: BlockReader<Block = HlBlock>>
     + EthBlocks
     + EthTransactions
     + LoadReceipt
@@ -58,8 +60,10 @@ impl<T> EthWrapper for T where
             RpcBlock<Self::NetworkTypes>,
             RpcReceipt<Self::NetworkTypes>,
             RpcHeader<Self::NetworkTypes>,
-        > + FullEthApiTypes<Primitives = HlPrimitives>
-        + RpcNodeCoreExt<Provider: BlockReader<Block = HlBlock>>
+        > + FullEthApiTypes<
+            Primitives = HlPrimitives,
+            NetworkTypes: RpcTypes<TransactionResponse = alloy_rpc_types_eth::Transaction>,
+        > + RpcNodeCoreExt<Provider: BlockReader<Block = HlBlock>>
         + EthBlocks
         + EthTransactions
         + LoadReceipt
@@ -262,6 +266,11 @@ fn adjust_block<Eth: EthWrapper>(
     new_block.transactions = match new_block.transactions {
         BlockTransactions::Full(mut transactions) => {
             transactions.drain(..system_tx_count);
+            transactions.iter_mut().for_each(|tx| {
+                if let Some(idx) = &mut tx.transaction_index {
+                    *idx -= system_tx_count as u64;
+                }
+            });
             BlockTransactions::Full(transactions)
         }
         BlockTransactions::Hashes(mut hashes) => {
