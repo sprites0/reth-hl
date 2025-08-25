@@ -72,10 +72,6 @@ impl EthChainSpec for HlChainSpec {
     fn bootnodes(&self) -> Option<Vec<NodeRecord>> {
         self.inner.bootnodes()
     }
-
-    fn is_optimism(&self) -> bool {
-        false
-    }
 }
 
 impl Hardforks for HlChainSpec {
@@ -102,12 +98,6 @@ impl Hardforks for HlChainSpec {
     }
 }
 
-impl From<ChainSpec> for HlChainSpec {
-    fn from(value: ChainSpec) -> Self {
-        Self { inner: value }
-    }
-}
-
 impl EthereumHardforks for HlChainSpec {
     fn ethereum_fork_activation(&self, fork: EthereumHardfork) -> ForkCondition {
         self.inner.ethereum_fork_activation(fork)
@@ -119,12 +109,6 @@ impl HlHardforks for HlChainSpec {}
 impl EthExecutorSpec for HlChainSpec {
     fn deposit_contract_address(&self) -> Option<Address> {
         None
-    }
-}
-
-impl From<HlChainSpec> for ChainSpec {
-    fn from(value: HlChainSpec) -> Self {
-        value.inner
     }
 }
 
