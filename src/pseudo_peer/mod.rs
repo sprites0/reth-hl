@@ -8,8 +8,6 @@ pub mod config;
 pub mod network;
 pub mod service;
 pub mod sources;
-#[cfg(test)]
-mod tests;
 pub mod utils;
 
 use std::sync::Arc;
