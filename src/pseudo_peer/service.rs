@@ -26,7 +26,6 @@ use std::{
     pin::Pin,
     sync::{Arc, Mutex},
     task::{Context, Poll},
-    time::Duration,
 };
 use tokio::{sync::mpsc, task::JoinHandle};
 use tracing::{debug, info};
@@ -49,8 +48,6 @@ pub struct BlockPoller {
 }
 
 impl BlockPoller {
-    const POLL_INTERVAL: Duration = Duration::from_millis(25);
-
     pub fn new_suspended<BS: BlockSource>(
         chain_id: u64,
         block_source: BS,
@@ -77,6 +74,7 @@ impl BlockPoller {
         start_rx.recv().await.ok_or(eyre::eyre!("Failed to receive start signal"))?;
         info!("Starting block poller");
 
+        let polling_interval = block_source.polling_interval();
         let mut next_block_number = block_source
             .find_latest_block_number()
             .await
@@ -88,7 +86,7 @@ impl BlockPoller {
                     block_tx_clone.send((next_block_number, block)).await?;
                     next_block_number += 1;
                 }
-                Err(_) => tokio::time::sleep(Self::POLL_INTERVAL).await,
+                Err(_) => tokio::time::sleep(polling_interval).await,
             }
         }
     }

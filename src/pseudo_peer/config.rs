@@ -1,31 +1,38 @@
 use crate::chainspec::HlChainSpec;
 
 use super::sources::{
-    BlockSourceBoxed, CachedBlockSource, HlNodeBlockSource, LocalBlockSource, S3BlockSource,
+    BlockSourceBoxed, CachedBlockSource, HlNodeBlockSource, HlNodeBlockSourceArgs,
+    LocalBlockSource, S3BlockSource,
 };
 use aws_config::BehaviorVersion;
-use std::{env::home_dir, path::PathBuf, sync::Arc};
+use std::{env::home_dir, path::PathBuf, sync::Arc, time::Duration};
 
 #[derive(Debug, Clone)]
 pub struct BlockSourceConfig {
     pub source_type: BlockSourceType,
-    pub block_source_from_node: Option<String>,
+    pub block_source_from_node: Option<HlNodeBlockSourceArgs>,
 }
 
 #[derive(Debug, Clone)]
 pub enum BlockSourceType {
-    S3Default,
-    S3 { bucket: String },
+    S3Default { polling_interval: Duration },
+    S3 { bucket: String, polling_interval: Duration },
     Local { path: PathBuf },
 }
 
 impl BlockSourceConfig {
-    pub async fn s3_default() -> Self {
-        Self { source_type: BlockSourceType::S3Default, block_source_from_node: None }
+    pub async fn s3_default(polling_interval: Duration) -> Self {
+        Self {
+            source_type: BlockSourceType::S3Default { polling_interval },
+            block_source_from_node: None,
+        }
     }
 
-    pub async fn s3(bucket: String) -> Self {
-        Self { source_type: BlockSourceType::S3 { bucket }, block_source_from_node: None }
+    pub async fn s3(bucket: String, polling_interval: Duration) -> Self {
+        Self {
+            source_type: BlockSourceType::S3 { bucket, polling_interval },
+            block_source_from_node: None,
+        }
     }
 
     pub fn local(path: PathBuf) -> Self {
@@ -45,15 +52,22 @@ impl BlockSourceConfig {
         }
     }
 
-    pub fn with_block_source_from_node(mut self, block_source_from_node: String) -> Self {
+    pub fn with_block_source_from_node(
+        mut self,
+        block_source_from_node: HlNodeBlockSourceArgs,
+    ) -> Self {
         self.block_source_from_node = Some(block_source_from_node);
         self
     }
 
     pub async fn create_block_source(&self, chain_spec: HlChainSpec) -> BlockSourceBoxed {
         match &self.source_type {
-            BlockSourceType::S3Default => s3_block_source(chain_spec.official_s3_bucket()).await,
-            BlockSourceType::S3 { bucket } => s3_block_source(bucket).await,
+            BlockSourceType::S3Default { polling_interval } => {
+                s3_block_source(chain_spec.official_s3_bucket(), *polling_interval).await
+            }
+            BlockSourceType::S3 { bucket, polling_interval } => {
+                s3_block_source(bucket, *polling_interval).await
+            }
             BlockSourceType::Local { path } => {
                 Arc::new(Box::new(LocalBlockSource::new(path.clone())))
             }
@@ -72,7 +86,7 @@ impl BlockSourceConfig {
         Arc::new(Box::new(
             HlNodeBlockSource::new(
                 fallback_block_source,
-                PathBuf::from(block_source_from_node.clone()),
+                block_source_from_node.clone(),
                 next_block_number,
             )
             .await,
@@ -91,9 +105,9 @@ impl BlockSourceConfig {
     }
 }
 
-async fn s3_block_source(bucket: impl AsRef<str>) -> BlockSourceBoxed {
+async fn s3_block_source(bucket: impl AsRef<str>, polling_interval: Duration) -> BlockSourceBoxed {
     let client = aws_sdk_s3::Client::new(
         &aws_config::defaults(BehaviorVersion::latest()).region("ap-northeast-1").load().await,
     );
-    Arc::new(Box::new(S3BlockSource::new(client, bucket.as_ref().to_string())))
+    Arc::new(Box::new(S3BlockSource::new(client, bucket.as_ref().to_string(), polling_interval)))
 }

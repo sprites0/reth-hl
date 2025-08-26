@@ -1,3 +1,7 @@
+use std::time::Duration;
+
+use crate::pseudo_peer::HlNodeBlockSourceArgs;
+
 use super::config::BlockSourceConfig;
 use clap::{Args, Parser};
 use reth_node_core::args::LogArgs;
@@ -13,7 +17,7 @@ pub struct BlockSourceArgs {
     block_source: Option<String>,
 
     #[arg(long, alias = "local-ingest-dir")]
-    block_source_from_node: Option<String>,
+    local_ingest_dir: Option<String>,
 
     /// Shorthand of --block-source=s3://hl-mainnet-evm-blocks
     #[arg(long, default_value_t = false)]
@@ -22,6 +26,19 @@ pub struct BlockSourceArgs {
     /// Shorthand of --block-source-from-node=~/hl/data/evm_blocks_and_receipts
     #[arg(long)]
     local: bool,
+
+    /// Interval for polling new blocks in S3 in milliseconds.
+    #[arg(id = "s3.polling-interval", long = "s3.polling-interval", default_value = "25")]
+    s3_polling_interval: u64,
+
+    /// Maximum allowed delay for the hl-node block source in milliseconds.
+    /// If this threshold is exceeded, the client falls back to other sources.
+    #[arg(
+        id = "local.fallback-threshold",
+        long = "local.fallback-threshold",
+        default_value = "5000"
+    )]
+    local_fallback_threshold: u64,
 }
 
 impl BlockSourceArgs {
@@ -33,7 +50,10 @@ impl BlockSourceArgs {
 
     async fn create_base_config(&self) -> eyre::Result<BlockSourceConfig> {
         if self.s3 {
-            return Ok(BlockSourceConfig::s3_default().await);
+            return Ok(BlockSourceConfig::s3_default(Duration::from_millis(
+                self.s3_polling_interval,
+            ))
+            .await);
         }
 
         if self.local {
@@ -47,18 +67,25 @@ impl BlockSourceArgs {
         };
 
         if let Some(bucket) = value.strip_prefix("s3://") {
-            Ok(BlockSourceConfig::s3(bucket.to_string()).await)
+            Ok(BlockSourceConfig::s3(
+                bucket.to_string(),
+                Duration::from_millis(self.s3_polling_interval),
+            )
+            .await)
         } else {
             Ok(BlockSourceConfig::local(value.into()))
         }
     }
 
     fn apply_node_source_config(&self, config: BlockSourceConfig) -> BlockSourceConfig {
-        let Some(block_source_from_node) = self.block_source_from_node.as_ref() else {
+        let Some(local_ingest_dir) = self.local_ingest_dir.as_ref() else {
             return config;
         };
 
-        config.with_block_source_from_node(block_source_from_node.to_string())
+        config.with_block_source_from_node(HlNodeBlockSourceArgs {
+            root: local_ingest_dir.into(),
+            fallback_threshold: Duration::from_millis(self.local_fallback_threshold),
+        })
     }
 }
 

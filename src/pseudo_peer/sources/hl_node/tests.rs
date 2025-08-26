@@ -1,11 +1,13 @@
 use super::*;
 use crate::{
     node::types::{reth_compat, ReadPrecompileCalls},
-    pseudo_peer::sources::LocalBlockSource,
+    pseudo_peer::sources::{hl_node::scan::LocalBlockAndReceipts, LocalBlockSource},
 };
 use alloy_consensus::{BlockBody, Header};
 use alloy_primitives::{Address, Bloom, Bytes, B256, B64, U256};
-use std::{io::Write, time::Duration as StdDuration};
+use std::{io::Write, time::Duration};
+
+const DEFAULT_FALLBACK_THRESHOLD_FOR_TEST: Duration = Duration::from_millis(5000);
 
 #[test]
 fn test_datetime_from_path() {
@@ -111,7 +113,10 @@ async fn setup_block_source_hierarchy() -> eyre::Result<BlockSourceHierarchy> {
     // Setup fallback block source
     let block_source_fallback = HlNodeBlockSource::new(
         BlockSourceBoxed::new(Box::new(LocalBlockSource::new("/nonexistent"))),
-        PathBuf::from("/nonexistent"),
+        HlNodeBlockSourceArgs {
+            root: { PathBuf::from("/nonexistent") },
+            fallback_threshold: DEFAULT_FALLBACK_THRESHOLD_FOR_TEST,
+        },
         1000000,
     )
     .await;
@@ -124,7 +129,10 @@ async fn setup_block_source_hierarchy() -> eyre::Result<BlockSourceHierarchy> {
 
     let block_source = HlNodeBlockSource::new(
         BlockSourceBoxed::new(Box::new(block_source_fallback.clone())),
-        temp_dir1.path().to_path_buf(),
+        HlNodeBlockSourceArgs {
+            root: temp_dir1.path().to_path_buf(),
+            fallback_threshold: DEFAULT_FALLBACK_THRESHOLD_FOR_TEST,
+        },
         1000000,
     )
     .await;
@@ -159,7 +167,7 @@ async fn test_update_last_fetch_no_fallback() -> eyre::Result<()> {
     assert!(block.is_err());
 
     writeln!(&mut file1, "{}", serde_json::to_string(&future_block_hl_node)?)?;
-    tokio::time::sleep(StdDuration::from_millis(100)).await;
+    tokio::time::sleep(Duration::from_millis(100)).await;
 
     let block = block_source.collect_block(1000001).await.unwrap();
     assert_eq!(block, future_block_hl_node.1);
@@ -177,7 +185,7 @@ async fn test_update_last_fetch_fallback() -> eyre::Result<()> {
     let block = block_source.collect_block(1000000).await.unwrap();
     assert_eq!(block, current_block.1);
 
-    tokio::time::sleep(MAX_ALLOWED_THRESHOLD_BEFORE_FALLBACK.unsigned_abs()).await;
+    tokio::time::sleep(DEFAULT_FALLBACK_THRESHOLD_FOR_TEST).await;
 
     writeln!(&mut file1, "{}", serde_json::to_string(&future_block_fallback)?)?;
     let block = block_source.collect_block(1000001).await.unwrap();
