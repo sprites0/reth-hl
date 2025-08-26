@@ -41,4 +41,8 @@ impl BlockSource for CachedBlockSource {
     fn recommended_chunk_size(&self) -> u64 {
         self.block_source.recommended_chunk_size()
     }
+
+    fn polling_interval(&self) -> std::time::Duration {
+        self.block_source.polling_interval()
+    }
 }

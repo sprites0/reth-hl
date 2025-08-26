@@ -2,7 +2,7 @@ use super::{utils, BlockSource};
 use crate::node::types::BlockAndReceipts;
 use aws_sdk_s3::types::RequestPayer;
 use futures::{future::BoxFuture, FutureExt};
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 use tracing::info;
 
 /// Block source that reads blocks from S3 (--s3)
@@ -10,11 +10,12 @@ use tracing::info;
 pub struct S3BlockSource {
     client: Arc<aws_sdk_s3::Client>,
     bucket: String,
+    polling_interval: Duration,
 }
 
 impl S3BlockSource {
-    pub fn new(client: aws_sdk_s3::Client, bucket: String) -> Self {
-        Self { client: client.into(), bucket }
+    pub fn new(client: aws_sdk_s3::Client, bucket: String, polling_interval: Duration) -> Self {
+        Self { client: client.into(), bucket, polling_interval }
     }
 
     async fn pick_path_with_highest_number(
@@ -86,5 +87,9 @@ impl BlockSource for S3BlockSource {
 
     fn recommended_chunk_size(&self) -> u64 {
         1000
+    }
+
+    fn polling_interval(&self) -> Duration {
+        self.polling_interval
     }
 }

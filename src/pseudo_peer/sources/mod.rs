@@ -1,6 +1,7 @@
 use crate::node::types::BlockAndReceipts;
+use auto_impl::auto_impl;
 use futures::future::BoxFuture;
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 // Module declarations
 mod cached;
@@ -11,11 +12,14 @@ mod utils;
 
 // Public exports
 pub use cached::CachedBlockSource;
-pub use hl_node::HlNodeBlockSource;
+pub use hl_node::{HlNodeBlockSource, HlNodeBlockSourceArgs};
 pub use local::LocalBlockSource;
 pub use s3::S3BlockSource;
 
+const DEFAULT_POLLING_INTERVAL: Duration = Duration::from_millis(25);
+
 /// Trait for block sources that can retrieve blocks from various sources
+#[auto_impl(&, &mut, Box, Arc)]
 pub trait BlockSource: Send + Sync + std::fmt::Debug + Unpin + 'static {
     /// Retrieves a block at the specified height
     fn collect_block(&self, height: u64) -> BoxFuture<'static, eyre::Result<BlockAndReceipts>>;
@@ -25,21 +29,12 @@ pub trait BlockSource: Send + Sync + std::fmt::Debug + Unpin + 'static {
 
     /// Returns the recommended chunk size for batch operations
     fn recommended_chunk_size(&self) -> u64;
+
+    /// Returns the polling interval
+    fn polling_interval(&self) -> Duration {
+        DEFAULT_POLLING_INTERVAL
+    }
 }
 
 /// Type alias for a boxed block source
 pub type BlockSourceBoxed = Arc<Box<dyn BlockSource>>;
-
-impl BlockSource for BlockSourceBoxed {
-    fn collect_block(&self, height: u64) -> BoxFuture<'static, eyre::Result<BlockAndReceipts>> {
-        self.as_ref().collect_block(height)
-    }
-
-    fn find_latest_block_number(&self) -> BoxFuture<'static, Option<u64>> {
-        self.as_ref().find_latest_block_number()
-    }
-
-    fn recommended_chunk_size(&self) -> u64 {
-        self.as_ref().recommended_chunk_size()
-    }
-}

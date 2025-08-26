@@ -14,35 +14,39 @@ use self::{
 use super::{BlockSource, BlockSourceBoxed};
 use crate::node::types::BlockAndReceipts;
 use futures::future::BoxFuture;
-use serde::{Deserialize, Serialize};
 use std::{
     path::{Path, PathBuf},
     sync::Arc,
+    time::Duration,
 };
-use time::{Duration, OffsetDateTime};
+use time::OffsetDateTime;
 use tokio::sync::Mutex;
 use tracing::{info, warn};
 
-const TAIL_INTERVAL: std::time::Duration = std::time::Duration::from_millis(25);
 const HOURLY_SUBDIR: &str = "hourly";
 const CACHE_SIZE: u32 = 8000; // 3660 blocks per hour
-const MAX_ALLOWED_THRESHOLD_BEFORE_FALLBACK: Duration = Duration::milliseconds(5000);
+const ONE_HOUR: Duration = Duration::from_secs(60 * 60);
+const TAIL_INTERVAL: Duration = Duration::from_millis(25);
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub(crate) struct LocalBlockAndReceipts(String, BlockAndReceipts);
+#[derive(Debug, Clone)]
+pub struct HlNodeBlockSourceArgs {
+    pub root: PathBuf,
+    pub fallback_threshold: Duration,
+}
 
 /// Block source that monitors the local ingest directory for the HL node.
 #[derive(Debug, Clone)]
 pub struct HlNodeBlockSource {
     pub fallback: BlockSourceBoxed,
-    pub local_ingest_dir: PathBuf,
     pub local_blocks_cache: Arc<Mutex<LocalBlocksCache>>,
     pub last_local_fetch: Arc<Mutex<Option<(u64, OffsetDateTime)>>>,
+    pub args: HlNodeBlockSourceArgs,
 }
 
 impl BlockSource for HlNodeBlockSource {
     fn collect_block(&self, height: u64) -> BoxFuture<'static, eyre::Result<BlockAndReceipts>> {
         let fallback = self.fallback.clone();
+        let args = self.args.clone();
         let local_blocks_cache = self.local_blocks_cache.clone();
         let last_local_fetch = self.last_local_fetch.clone();
         Box::pin(async move {
@@ -55,7 +59,7 @@ impl BlockSource for HlNodeBlockSource {
 
             if let Some((last_height, last_poll_time)) = *last_local_fetch.lock().await {
                 let more_recent = last_height < height;
-                let too_soon = now - last_poll_time < MAX_ALLOWED_THRESHOLD_BEFORE_FALLBACK;
+                let too_soon = now - last_poll_time < args.fallback_threshold;
                 if more_recent && too_soon {
                     return Err(eyre::eyre!(
                             "Not found locally; limiting polling rate before fallback so that hl-node has chance to catch up"
@@ -71,12 +75,12 @@ impl BlockSource for HlNodeBlockSource {
 
     fn find_latest_block_number(&self) -> BoxFuture<'static, Option<u64>> {
         let fallback = self.fallback.clone();
-        let local_ingest_dir = self.local_ingest_dir.clone();
+        let args = self.args.clone();
         Box::pin(async move {
-            let Some(dir) = FileOperations::find_latest_hourly_file(&local_ingest_dir) else {
+            let Some(dir) = FileOperations::find_latest_hourly_file(&args.root) else {
                 warn!(
                     "No EVM blocks from hl-node found at {:?}; fallback to s3/ingest-dir",
-                    local_ingest_dir
+                    args.root
                 );
                 return fallback.find_latest_block_number().await;
             };
@@ -160,7 +164,7 @@ impl HlNodeBlockSource {
     }
 
     async fn start_local_ingest_loop(&self, current_head: u64) {
-        let root = self.local_ingest_dir.to_owned();
+        let root = self.args.root.to_owned();
         let cache = self.local_blocks_cache.clone();
         tokio::spawn(async move {
             let mut next_height = current_head;
@@ -185,8 +189,8 @@ impl HlNodeBlockSource {
                     cache.lock().await.load_scan_result(scan_result);
                 }
                 let now = OffsetDateTime::now_utc();
-                if dt + Duration::HOUR < now {
-                    dt += Duration::HOUR;
+                if dt + ONE_HOUR < now {
+                    dt += ONE_HOUR;
                     (hour, day_str, last_line) = (dt.hour(), TimeUtils::date_from_datetime(dt), 0);
                     info!(
                         "Moving to new file: {:?}",
@@ -201,7 +205,7 @@ impl HlNodeBlockSource {
 
     pub(crate) async fn run(&self, next_block_number: u64) -> eyre::Result<()> {
         let _ = Self::try_backfill_local_blocks(
-            &self.local_ingest_dir,
+            &self.args.root,
             &self.local_blocks_cache,
             next_block_number,
         )
@@ -212,12 +216,12 @@ impl HlNodeBlockSource {
 
     pub async fn new(
         fallback: BlockSourceBoxed,
-        local_ingest_dir: PathBuf,
+        args: HlNodeBlockSourceArgs,
         next_block_number: u64,
     ) -> Self {
         let block_source = Self {
             fallback,
-            local_ingest_dir,
+            args,
             local_blocks_cache: Arc::new(Mutex::new(LocalBlocksCache::new(CACHE_SIZE))),
             last_local_fetch: Arc::new(Mutex::new(None)),
         };
