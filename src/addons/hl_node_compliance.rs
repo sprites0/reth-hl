@@ -75,11 +75,11 @@ impl<T> EthWrapper for T where
 #[rpc(server, namespace = "eth")]
 #[async_trait]
 pub trait EthSystemTransactionApi<T: RpcObject> {
-    #[method(name = "getSystemTxsByBlockHash")]
-    async fn get_system_txs_by_block_hash(&self, hash: B256) -> RpcResult<Option<Vec<T>>>;
+    #[method(name = "getEvmSystemTxsByBlockHash")]
+    async fn get_evm_system_txs_by_block_hash(&self, hash: B256) -> RpcResult<Option<Vec<T>>>;
 
-    #[method(name = "getSystemTxsByBlockNumber")]
-    async fn get_system_txs_by_block_number(
+    #[method(name = "getEvmSystemTxsByBlockNumber")]
+    async fn get_evm_system_txs_by_block_number(
         &self,
         block_id: Option<BlockId>,
     ) -> RpcResult<Option<Vec<T>>>;
@@ -103,24 +103,30 @@ where
     jsonrpsee_types::ErrorObject<'static>: From<<Eth as EthApiTypes>::Error>,
 {
     /// Returns the system transactions for a given block hash.
-    /// Compliance with the `eth_getSystemTxsByBlockHash` RPC method introduced by hl-node.
+    /// Semi-compliance with the `eth_getSystemTxsByBlockHash` RPC method introduced by hl-node.
     /// https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/hyperevm/json-rpc
-    async fn get_system_txs_by_block_hash(
+    ///
+    /// NOTE: Method name differs from hl-node because we retrieve transaction data from EVM
+    /// (signature recovery for 'from' address, EVM hash calculation) rather than HyperCore.
+    async fn get_evm_system_txs_by_block_hash(
         &self,
         hash: B256,
     ) -> RpcResult<Option<Vec<RpcTransaction<Eth::NetworkTypes>>>> {
-        trace!(target: "rpc::eth", ?hash, "Serving eth_getSystemTxsByBlockHash");
-        self.get_system_txs_by_block_number(Some(BlockId::Hash(hash.into()))).await
+        trace!(target: "rpc::eth", ?hash, "Serving eth_getEvmSystemTxsByBlockHash");
+        self.get_evm_system_txs_by_block_number(Some(BlockId::Hash(hash.into()))).await
     }
 
     /// Returns the system transactions for a given block number, or the latest block if no block
-    /// number is provided. Compliance with the `eth_getSystemTxsByBlockNumber` RPC method
+    /// number is provided. Semi-compliance with the `eth_getSystemTxsByBlockNumber` RPC method
     /// introduced by hl-node. https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/hyperevm/json-rpc
-    async fn get_system_txs_by_block_number(
+    ///
+    /// NOTE: Method name differs from hl-node because we retrieve transaction data from EVM
+    /// (signature recovery for 'from' address, EVM hash calculation) rather than HyperCore.
+    async fn get_evm_system_txs_by_block_number(
         &self,
         id: Option<BlockId>,
     ) -> RpcResult<Option<Vec<RpcTransaction<Eth::NetworkTypes>>>> {
-        trace!(target: "rpc::eth", ?id, "Serving eth_getSystemTxsByBlockNumber");
+        trace!(target: "rpc::eth", ?id, "Serving eth_getEvmSystemTxsByBlockNumber");
 
         if let Some(block) = self.eth_api.recovered_block(id.unwrap_or_default()).await? {
             let block_hash = block.hash();
