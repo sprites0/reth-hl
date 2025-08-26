@@ -193,3 +193,22 @@ async fn test_update_last_fetch_fallback() -> eyre::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_hourly_files_sort() -> eyre::Result<()> {
+    let temp_dir = tempfile::tempdir()?;
+    // create 20250826/9, 20250826/14
+    let targets = [("20250826", "9"), ("20250826", "14")];
+    for (date, hour) in targets {
+        let hourly_file = temp_dir.path().join(HOURLY_SUBDIR).join(date).join(hour);
+        let parent = hourly_file.parent().unwrap();
+        std::fs::create_dir_all(parent)?;
+        std::fs::File::create(hourly_file)?;
+    }
+    let files = FileOperations::all_hourly_files(temp_dir.path()).unwrap();
+    let file_names: Vec<_> =
+        files.into_iter().map(|p| p.file_name().unwrap().to_string_lossy().into_owned()).collect();
+
+    assert_eq!(file_names, ["9", "14"]);
+    Ok(())
+}

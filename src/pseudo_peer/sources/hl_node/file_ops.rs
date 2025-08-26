@@ -17,12 +17,12 @@ impl FileOperations {
                 files.extend(
                     subentries
                         .filter_map(|f| f.ok().map(|f| f.path()))
-                        .filter(|p| TimeUtils::datetime_from_path(p).is_some()),
+                        .filter_map(|p| TimeUtils::datetime_from_path(&p).map(|dt| (dt, p))),
                 );
             }
         }
         files.sort();
-        Some(files)
+        Some(files.into_iter().map(|(_, p)| p).collect())
     }
 
     pub fn find_latest_hourly_file(root: &Path) -> Option<PathBuf> {
