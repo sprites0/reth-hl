@@ -124,12 +124,13 @@ impl FromRecoveredTx<TransactionSigned> for HlTxEnv<TxEnv> {
 
 impl FromTxWithEncoded<TransactionSigned> for HlTxEnv<TxEnv> {
     fn from_encoded_tx(tx: &TransactionSigned, sender: Address, _encoded: Bytes) -> Self {
+        use reth_primitives::Transaction;
         let base = match tx.clone().into_inner().into_typed_transaction() {
-            reth_primitives::Transaction::Legacy(tx) => TxEnv::from_recovered_tx(&tx, sender),
-            reth_primitives::Transaction::Eip2930(tx) => TxEnv::from_recovered_tx(&tx, sender),
-            reth_primitives::Transaction::Eip1559(tx) => TxEnv::from_recovered_tx(&tx, sender),
-            reth_primitives::Transaction::Eip4844(tx) => TxEnv::from_recovered_tx(&tx, sender),
-            reth_primitives::Transaction::Eip7702(tx) => TxEnv::from_recovered_tx(&tx, sender),
+            Transaction::Legacy(tx) => TxEnv::from_recovered_tx(&tx, sender),
+            Transaction::Eip2930(tx) => TxEnv::from_recovered_tx(&tx, sender),
+            Transaction::Eip1559(tx) => TxEnv::from_recovered_tx(&tx, sender),
+            Transaction::Eip4844(tx) => TxEnv::from_recovered_tx(&tx, sender),
+            Transaction::Eip7702(tx) => TxEnv::from_recovered_tx(&tx, sender),
         };
 
         Self { base }
