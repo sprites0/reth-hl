@@ -18,7 +18,7 @@ use alloy_rpc_types::{
 };
 use jsonrpsee::{proc_macros::rpc, PendingSubscriptionSink, SubscriptionMessage, SubscriptionSink};
 use jsonrpsee_core::{async_trait, RpcResult};
-use jsonrpsee_types::ErrorObject;
+use jsonrpsee_types::{error::INTERNAL_ERROR_CODE, ErrorObject};
 use reth::{api::FullNodeComponents, builder::rpc::RpcContext, tasks::TaskSpawner};
 use reth_primitives_traits::{BlockBody as _, SignedTransaction};
 use reth_provider::{BlockIdReader, BlockReader, BlockReaderIdExt, ReceiptProvider};
@@ -113,7 +113,11 @@ where
         hash: B256,
     ) -> RpcResult<Option<Vec<RpcTransaction<Eth::NetworkTypes>>>> {
         trace!(target: "rpc::eth", ?hash, "Serving eth_getEvmSystemTxsByBlockHash");
-        self.get_evm_system_txs_by_block_number(Some(BlockId::Hash(hash.into()))).await
+        match self.get_evm_system_txs_by_block_number(Some(BlockId::Hash(hash.into()))).await {
+            Ok(Some(txs)) => Ok(Some(txs)),
+            // hl-node returns none if the block is not found
+            _ => Ok(None),
+        }
     }
 
     /// Returns the system transactions for a given block number, or the latest block if no block
@@ -155,7 +159,12 @@ where
                 .collect();
             Ok(Some(system_txs))
         } else {
-            Ok(None)
+            // hl-node returns an error if the block is not found
+            Err(ErrorObject::owned(
+                INTERNAL_ERROR_CODE,
+                format!("invalid block height: {id:?}"),
+                Some(()),
+            ))
         }
     }
 }
