@@ -74,7 +74,7 @@ impl<T> EthWrapper for T where
 
 #[rpc(server, namespace = "eth")]
 #[async_trait]
-pub trait EthSystemTransactionApi<T: RpcObject> {
+pub trait EthSystemTransactionApi<T: RpcObject, R: RpcObject> {
     #[method(name = "getEvmSystemTxsByBlockHash")]
     async fn get_evm_system_txs_by_block_hash(&self, hash: B256) -> RpcResult<Option<Vec<T>>>;
 
@@ -83,6 +83,18 @@ pub trait EthSystemTransactionApi<T: RpcObject> {
         &self,
         block_id: Option<BlockId>,
     ) -> RpcResult<Option<Vec<T>>>;
+
+    #[method(name = "getEvmSystemTxsReceiptsByBlockHash")]
+    async fn get_evm_system_txs_receipts_by_block_hash(
+        &self,
+        hash: B256,
+    ) -> RpcResult<Option<Vec<R>>>;
+
+    #[method(name = "getEvmSystemTxsReceiptsByBlockNumber")]
+    async fn get_evm_system_txs_receipts_by_block_number(
+        &self,
+        block_id: Option<BlockId>,
+    ) -> RpcResult<Option<Vec<R>>>;
 }
 
 pub struct HlSystemTransactionExt<Eth: EthWrapper> {
@@ -97,7 +109,8 @@ impl<Eth: EthWrapper> HlSystemTransactionExt<Eth> {
 }
 
 #[async_trait]
-impl<Eth: EthWrapper> EthSystemTransactionApiServer<RpcTransaction<Eth::NetworkTypes>>
+impl<Eth: EthWrapper>
+    EthSystemTransactionApiServer<RpcTransaction<Eth::NetworkTypes>, RpcReceipt<Eth::NetworkTypes>>
     for HlSystemTransactionExt<Eth>
 where
     jsonrpsee_types::ErrorObject<'static>: From<<Eth as EthApiTypes>::Error>,
@@ -163,6 +176,82 @@ where
             Err(ErrorObject::owned(
                 INTERNAL_ERROR_CODE,
                 format!("invalid block height: {id:?}"),
+                Some(()),
+            ))
+        }
+    }
+
+    /// Returns the receipts for the system transactions for a given block hash.
+    async fn get_evm_system_txs_receipts_by_block_hash(
+        &self,
+        hash: B256,
+    ) -> RpcResult<Option<Vec<RpcReceipt<Eth::NetworkTypes>>>> {
+        trace!(target: "rpc::eth", ?hash, "Serving eth_getEvmSystemTxsReceiptsByBlockHash");
+        match self
+            .get_evm_system_txs_receipts_by_block_number(Some(BlockId::Hash(hash.into())))
+            .await
+        {
+            Ok(Some(receipts)) => Ok(Some(receipts)),
+            _ => Ok(None),
+        }
+    }
+
+    /// Returns the receipts for the system transactions for a given block number, or the latest
+    /// block if no block
+    async fn get_evm_system_txs_receipts_by_block_number(
+        &self,
+        block_id: Option<BlockId>,
+    ) -> RpcResult<Option<Vec<RpcReceipt<Eth::NetworkTypes>>>> {
+        trace!(target: "rpc::eth", ?block_id, "Serving eth_getEvmSystemTxsReceiptsByBlockNumber");
+        if let Some((block, receipts)) =
+            EthBlocks::load_block_and_receipts(&self.eth_api, block_id.unwrap_or_default()).await?
+        {
+            let block_number = block.number;
+            let base_fee = block.base_fee_per_gas;
+            let block_hash = block.hash();
+            let excess_blob_gas = block.excess_blob_gas;
+            let timestamp = block.timestamp;
+            let mut gas_used = 0;
+            let mut next_log_index = 0;
+
+            let mut inputs = Vec::new();
+            for (idx, (tx, receipt)) in
+                block.transactions_recovered().zip(receipts.iter()).enumerate()
+            {
+                if receipt.cumulative_gas_used() != 0 {
+                    break;
+                }
+
+                let meta = TransactionMeta {
+                    tx_hash: *tx.tx_hash(),
+                    index: idx as u64,
+                    block_hash,
+                    block_number,
+                    base_fee,
+                    excess_blob_gas,
+                    timestamp,
+                };
+
+                let input = ConvertReceiptInput {
+                    receipt: Cow::Borrowed(receipt),
+                    tx,
+                    gas_used: receipt.cumulative_gas_used() - gas_used,
+                    next_log_index,
+                    meta,
+                };
+
+                gas_used = receipt.cumulative_gas_used();
+                next_log_index += receipt.logs().len();
+
+                inputs.push(input);
+            }
+
+            let receipts = self.eth_api.tx_resp_builder().convert_receipts(inputs)?;
+            Ok(Some(receipts))
+        } else {
+            Err(ErrorObject::owned(
+                INTERNAL_ERROR_CODE,
+                format!("invalid block height: {block_id:?}"),
                 Some(()),
             ))
         }
