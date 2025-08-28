@@ -7,17 +7,18 @@
 //! For non-system transactions, we can just return the log as is, and the client will
 //! adjust the transaction index accordingly.
 
-use alloy_consensus::{transaction::TransactionMeta, TxReceipt};
+use alloy_consensus::{transaction::TransactionMeta, BlockHeader, TxReceipt};
 use alloy_eips::{BlockId, BlockNumberOrTag};
 use alloy_json_rpc::RpcObject;
 use alloy_primitives::{B256, U256};
 use alloy_rpc_types::{
     pubsub::{Params, SubscriptionKind},
     BlockTransactions, Filter, FilterChanges, FilterId, Log, PendingTransactionFilterKind,
+    TransactionInfo,
 };
 use jsonrpsee::{proc_macros::rpc, PendingSubscriptionSink, SubscriptionMessage, SubscriptionSink};
 use jsonrpsee_core::{async_trait, RpcResult};
-use jsonrpsee_types::ErrorObject;
+use jsonrpsee_types::{error::INTERNAL_ERROR_CODE, ErrorObject};
 use reth::{api::FullNodeComponents, builder::rpc::RpcContext, tasks::TaskSpawner};
 use reth_primitives_traits::{BlockBody as _, SignedTransaction};
 use reth_provider::{BlockIdReader, BlockReader, BlockReaderIdExt, ReceiptProvider};
@@ -69,6 +70,103 @@ impl<T> EthWrapper for T where
         + LoadReceipt
         + 'static
 {
+}
+
+#[rpc(server, namespace = "eth")]
+#[async_trait]
+pub trait EthSystemTransactionApi<T: RpcObject> {
+    #[method(name = "getEvmSystemTxsByBlockHash")]
+    async fn get_evm_system_txs_by_block_hash(&self, hash: B256) -> RpcResult<Option<Vec<T>>>;
+
+    #[method(name = "getEvmSystemTxsByBlockNumber")]
+    async fn get_evm_system_txs_by_block_number(
+        &self,
+        block_id: Option<BlockId>,
+    ) -> RpcResult<Option<Vec<T>>>;
+}
+
+pub struct HlSystemTransactionExt<Eth: EthWrapper> {
+    eth_api: Eth,
+    _marker: PhantomData<Eth>,
+}
+
+impl<Eth: EthWrapper> HlSystemTransactionExt<Eth> {
+    pub fn new(eth_api: Eth) -> Self {
+        Self { eth_api, _marker: PhantomData }
+    }
+}
+
+#[async_trait]
+impl<Eth: EthWrapper> EthSystemTransactionApiServer<RpcTransaction<Eth::NetworkTypes>>
+    for HlSystemTransactionExt<Eth>
+where
+    jsonrpsee_types::ErrorObject<'static>: From<<Eth as EthApiTypes>::Error>,
+{
+    /// Returns the system transactions for a given block hash.
+    /// Semi-compliance with the `eth_getSystemTxsByBlockHash` RPC method introduced by hl-node.
+    /// https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/hyperevm/json-rpc
+    ///
+    /// NOTE: Method name differs from hl-node because we retrieve transaction data from EVM
+    /// (signature recovery for 'from' address, EVM hash calculation) rather than HyperCore.
+    async fn get_evm_system_txs_by_block_hash(
+        &self,
+        hash: B256,
+    ) -> RpcResult<Option<Vec<RpcTransaction<Eth::NetworkTypes>>>> {
+        trace!(target: "rpc::eth", ?hash, "Serving eth_getEvmSystemTxsByBlockHash");
+        match self.get_evm_system_txs_by_block_number(Some(BlockId::Hash(hash.into()))).await {
+            Ok(Some(txs)) => Ok(Some(txs)),
+            // hl-node returns none if the block is not found
+            _ => Ok(None),
+        }
+    }
+
+    /// Returns the system transactions for a given block number, or the latest block if no block
+    /// number is provided. Semi-compliance with the `eth_getSystemTxsByBlockNumber` RPC method
+    /// introduced by hl-node. https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/hyperevm/json-rpc
+    ///
+    /// NOTE: Method name differs from hl-node because we retrieve transaction data from EVM
+    /// (signature recovery for 'from' address, EVM hash calculation) rather than HyperCore.
+    async fn get_evm_system_txs_by_block_number(
+        &self,
+        id: Option<BlockId>,
+    ) -> RpcResult<Option<Vec<RpcTransaction<Eth::NetworkTypes>>>> {
+        trace!(target: "rpc::eth", ?id, "Serving eth_getEvmSystemTxsByBlockNumber");
+
+        if let Some(block) = self.eth_api.recovered_block(id.unwrap_or_default()).await? {
+            let block_hash = block.hash();
+            let block_number = block.number();
+            let base_fee_per_gas = block.base_fee_per_gas();
+            let system_txs = block
+                .transactions_with_sender()
+                .enumerate()
+                .filter_map(|(index, (signer, tx))| {
+                    if tx.is_system_transaction() {
+                        let tx_info = TransactionInfo {
+                            hash: Some(*tx.tx_hash()),
+                            block_hash: Some(block_hash),
+                            block_number: Some(block_number),
+                            base_fee: base_fee_per_gas,
+                            index: Some(index as u64),
+                        };
+                        self.eth_api
+                            .tx_resp_builder()
+                            .fill(tx.clone().with_signer(*signer), tx_info)
+                            .ok()
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            Ok(Some(system_txs))
+        } else {
+            // hl-node returns an error if the block is not found
+            Err(ErrorObject::owned(
+                INTERNAL_ERROR_CODE,
+                format!("invalid block height: {id:?}"),
+                Some(()),
+            ))
+        }
+    }
 }
 
 pub struct HlNodeFilterHttp<Eth: EthWrapper> {
@@ -146,8 +244,9 @@ impl<Eth: EthWrapper> HlNodeFilterWs<Eth> {
 }
 
 #[async_trait]
-impl<Eth: EthWrapper> EthPubSubApiServer<RpcTransaction<Eth::NetworkTypes>>
-    for HlNodeFilterWs<Eth>
+impl<Eth: EthWrapper> EthPubSubApiServer<RpcTransaction<Eth::NetworkTypes>> for HlNodeFilterWs<Eth>
+where
+    jsonrpsee_types::error::ErrorObject<'static>: From<<Eth as EthApiTypes>::Error>,
 {
     async fn subscribe(
         &self,
@@ -473,5 +572,9 @@ where
     ctx.modules.replace_configured(
         HlNodeBlockFilterHttp::new(Arc::new(ctx.registry.eth_api().clone())).into_rpc(),
     )?;
+
+    ctx.modules
+        .merge_configured(HlSystemTransactionExt::new(ctx.registry.eth_api().clone()).into_rpc())?;
+
     Ok(())
 }
